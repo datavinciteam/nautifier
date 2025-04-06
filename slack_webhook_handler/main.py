@@ -5,6 +5,7 @@ import google.cloud.tasks_v2
 from google.cloud.tasks_v2 import HttpMethod
 import os
 
+#testing local envt setup
 # **Set up Google Cloud Logging**
 client = google.cloud.logging.Client()
 client.setup_logging()
