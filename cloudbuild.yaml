@@ -1,3 +1,5 @@
+options:
+  logging: CLOUD_LOGGING_ONLY
 steps:
   # Deploy the slack_webhook_handler Cloud Run Function from source
   - name: 'Deploy slack_webhook_handler'
@@ -5,7 +7,7 @@ steps:
     args:
       - 'run'
       - 'deploy'
-      - 'slack_webhook_handler' # Replace with your function name
+      - 'slack_webhook_handler' # Replace with your function name IF different from directory
       - '--source'
       - './slack_webhook_handler' # Path to your webhook handler source directory
       - '--region'
@@ -25,7 +27,7 @@ steps:
     args:
       - 'run'
       - 'deploy'
-      - 'slack_event_processor' # Replace with your function name
+      - 'slack_event_processor' # Replace with your function name IF different from directory
       - '--source'
       - './slack_events' # Path to your event handler source directory
       - '--region'
