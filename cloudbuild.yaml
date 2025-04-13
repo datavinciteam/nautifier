@@ -6,7 +6,7 @@ steps:
     args:
       - 'run'
       - 'deploy'
-      - 'slack_webhook_handler'
+      - 'slack-webhook-handler'  
       - '--source'
       - './slack_webhook_handler'
       - '--region'
@@ -19,7 +19,7 @@ steps:
     args:
       - 'run'
       - 'deploy'
-      - 'slack_event_processor'
+      - 'slack-event-processor' 
       - '--source'
       - './slack_events'
       - '--region'
