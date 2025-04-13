@@ -63,7 +63,7 @@ def clean_slack_text(text):
     text = re.sub(r"<(https?://[^|>]+)(\\|[^>]+)?>", r"\1", text)
     return text.strip()
     
-
+    
 # --- Handle Slack message and process Gemini response ---
 def get_gemini_response_with_functions(prompt):
     try:
