@@ -20,7 +20,7 @@ WEEKLY_INDUSTRY_UPDATES_CHANNEL = "C08AEB7H0JE" #weekly-industy-updates channel 
 TAG_MANAGEMENT_CHANNEL = NAUTIFIER_SANDBOX_CHANNEL #"C01SK3F164U"  # Tag Management Channel ID
 LEAVES_CHANNEL = "C04HY5GR91B"  # Leaves Management Channel ID
 
-# Temporary in-memory cache with timestamps to prevent duplicates.
+# Temporary in-memory cache with timestamps to prevent duplicates
 EVENT_CACHE = {}
 EVENT_EXPIRY_TIME = 60  # Time in seconds to retain event timestamps before allowing reprocessing
 
