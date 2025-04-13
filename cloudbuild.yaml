@@ -1,7 +1,6 @@
 steps:
   # Deploy the slack_webhook_handler Cloud Run Function from source
   - name: 'Deploy slack_webhook_handler'
-    image: 'gcr.io/google-cloud-sdk'
     entrypoint: 'gcloud'
     args:
       - 'run'
@@ -22,7 +21,6 @@ steps:
 
   # Deploy the slack_events Cloud Run Function from source
   - name: 'Deploy slack_events'
-    image: 'gcr.io/google-cloud-sdk'
     entrypoint: 'gcloud'
     args:
       - 'run'
