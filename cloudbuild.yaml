@@ -1,42 +1,29 @@
 options:
   logging: CLOUD_LOGGING_ONLY
-steps:
-  # Deploy the slack_webhook_handler Cloud Run Function from source
-  - name: 'Deploy slack_webhook_handler'
-    entrypoint: 'gcloud'
-    args:
-      - 'run'
-      - 'deploy'
-      - 'slack_webhook_handler' # Replace with your function name IF different from directory
-      - '--source'
-      - './slack_webhook_handler' # Path to your webhook handler source directory
-      - '--region'
-      - 'us-central1' # Replace with your function's region
-      - '--platform'
-      - 'managed'
-      - '--allow-unauthenticated' # Adjust authentication as needed
-      # Add any necessary environment variables here using --set-env-vars
-      # For example:
-      # - '--set-env-vars'
-      # - 'EVENT_HANDLER_URL=https://your-live-url.com,LOCAL_DEV_MODE=false'
-    waitFor: ['-']
 
-  # Deploy the slack_events Cloud Run Function from source
-  - name: 'Deploy slack_events'
-    entrypoint: 'gcloud'
+steps:
+  - name: 'gcr.io/cloud-builders/gcloud'
     args:
       - 'run'
       - 'deploy'
-      - 'slack_event_processor' # Replace with your function name IF different from directory
+      - 'slack_webhook_handler'
       - '--source'
-      - './slack_events' # Path to your event handler source directory
+      - './slack_webhook_handler'
       - '--region'
-      - 'us-central1' # Replace with your function's region
+      - 'us-central1'
       - '--platform'
       - 'managed'
-      - '--allow-unauthenticated' # Adjust authentication as needed
-      # Add any necessary environment variables here using --set-env-vars
-      # For example:
-      # - '--set-env-vars'
-      # - 'GCP_PROJECT_ID=$PROJECT_ID,CLOUD_TASKS_QUEUE=slack-event-queue'
-    waitFor: ['-']
+      - '--allow-unauthenticated'
+
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'slack_event_processor'
+      - '--source'
+      - './slack_events'
+      - '--region'
+      - 'us-central1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
