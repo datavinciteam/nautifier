@@ -62,7 +62,7 @@ def clean_slack_text(text):
     # Replace Slack links: <url|label> or <url> → url
     text = re.sub(r"<(https?://[^|>]+)(\\|[^>]+)?>", r"\1", text)
     return text.strip()
-
+    
 
 # --- Handle Slack message and process Gemini response ---
 def get_gemini_response_with_functions(prompt):
