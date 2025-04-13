@@ -1,0 +1,42 @@
+steps:
+  # Deploy the slack_webhook_handler Cloud Run Function from source
+  - name: 'Deploy slack_webhook_handler'
+    image: 'gcr.io/google-cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'slack_webhook_handler' # Replace with your function name
+      - '--source'
+      - './slack_webhook_handler' # Path to your webhook handler source directory
+      - '--region'
+      - 'us-central1' # Replace with your function's region
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated' # Adjust authentication as needed
+      # Add any necessary environment variables here using --set-env-vars
+      # For example:
+      # - '--set-env-vars'
+      # - 'EVENT_HANDLER_URL=https://your-live-url.com,LOCAL_DEV_MODE=false'
+    waitFor: ['-']
+
+  # Deploy the slack_events Cloud Run Function from source
+  - name: 'Deploy slack_events'
+    image: 'gcr.io/google-cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'slack_event_processor' # Replace with your function name
+      - '--source'
+      - './slack_events' # Path to your event handler source directory
+      - '--region'
+      - 'us-central1' # Replace with your function's region
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated' # Adjust authentication as needed
+      # Add any necessary environment variables here using --set-env-vars
+      # For example:
+      # - '--set-env-vars'
+      # - 'GCP_PROJECT_ID=$PROJECT_ID,CLOUD_TASKS_QUEUE=slack-event-queue'
+    waitFor: ['-']
