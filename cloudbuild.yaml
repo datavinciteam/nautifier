@@ -1,35 +1,35 @@
 options:
-  logging: CLOUD_LOGGING_ONLY  # Use Cloud Logging only for build logs
+  logging: CLOUD_LOGGING_ONLY
 
 steps:
-  # Step 1: Deploy the slack-webhook-handler function (Cloud Function)
+  # Deploy slack-webhook-handler Cloud Function
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: 'deploy-slack-webhook-handler'
     args:
       - 'gcloud'
       - 'functions'
       - 'deploy'
-      - 'slack-webhook-handler'  # Name of the function
-      - '--region=us-central1'  # Specify the region for deployment
-      - '--source=slack_webhook_handler'  # Path to the function source
-      - '--trigger-http'  # HTTP trigger for the function
-      - '--runtime=python310'  # Python 3.10 runtime
-      - '--entry-point=slack_webhook_handler'  # Entry point function name
+      - 'slack-webhook-handler'  # Function name
+      - '--region=us-central1'
+      - '--source=.'  # Path to the source code for slack-webhook-handler
+      - '--runtime=python310'  # Python runtime for the function
+      - '--entry-point=slack_webhook_handler'  # Function entry point
+      - '--trigger-http'  # HTTP trigger
       - '--allow-unauthenticated'  # Allow unauthenticated access
-      - '--gen2'  # Explicitly deploy as Gen 2 function
+    waitFor: ['-']  # Don't wait for any previous steps
 
-  # Step 2: Deploy the slack-events function (Cloud Function)
+  # Deploy slack-events Cloud Function
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    id: 'deploy-event-processor'
+    id: 'deploy-slack-events'
     args:
       - 'gcloud'
       - 'functions'
       - 'deploy'
-      - 'slack-events'  # Name of the function
-      - '--region=us-central1'  # Specify the region
-      - '--source=./slack_events'  # Path to the function source
+      - 'slack-events'  # Function name
+      - '--region=us-central1'
+      - '--source=.'  # Path to the source code for slack-events
+      - '--runtime=python310'  # Python runtime for the function
+      - '--entry-point=slack_event_processor'  # Function entry point
       - '--trigger-http'  # HTTP trigger
-      - '--runtime=python310'  # Python 3.10 runtime
-      - '--entry-point=slack_event_processor'  # Entry point function name
       - '--allow-unauthenticated'  # Allow unauthenticated access
-      - '--gen2'  # Explicitly deploy as Gen 2 function
+    waitFor: ['-']  # Don't wait for any previous steps
