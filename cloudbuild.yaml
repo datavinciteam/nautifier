@@ -1,28 +1,29 @@
+options:
+  logging: CLOUD_LOGGING_ONLY  # Use Cloud Logging only for build logs
+
 steps:
-  # Step 1: Deploy the slack-webhook-handler function
+  # Step 1: Deploy slack-webhook-handler function
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     args:
       - gcloud
       - functions
       - deploy
-      - slack-webhook-handler  # Name of the slack-webhook-handler function
+      - slack-webhook-handler
       - --region=us-central1
-      - --source=slack_webhook_handler  # Path to the source directory for slack-webhook-handler
-      - --trigger-http  # Set to HTTP trigger
-      - --runtime=python310  # Specify the Python runtime
-      - --entry-point=slack_webhook_handler  # Entry point for slack-webhook-handler function
+      - --source=slack_webhook_handler
+      - --trigger-http
+      - --runtime=python310
+      - --entry-point=slack_webhook_handler
 
-  # Step 2: Deploy the slack-events function
+  # Step 2: Deploy slack-events function
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     args:
       - gcloud
       - functions
       - deploy
-      - slack-events  # Name of the slack-events function
+      - slack-events
       - --region=us-central1
-      - --source=slack_events  # Path to the source directory for slack-events
-      - --trigger-http  # Set to HTTP trigger
-      - --runtime=python310  # Specify the Python runtime
-      - --entry-point=slack_event_processor  # Entry point for slack-events function
-
-# After this Cloud Build configuration, both functions will be deployed.
+      - --source=slack_events
+      - --trigger-http
+      - --runtime=python310
+      - --entry-point=slack_event_processor
