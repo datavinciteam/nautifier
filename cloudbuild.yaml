@@ -29,7 +29,7 @@ steps:
       - 'deploy'
       - 'slack-events'
       - '--source'
-      - './slack_event_processor'
+      - './slack_events'
       - '--region'
       - 'us-central1'
       - '--platform'
