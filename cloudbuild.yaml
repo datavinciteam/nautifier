@@ -1,29 +1,35 @@
 options:
-  logging: CLOUD_LOGGING_ONLY  # Use Cloud Logging only for build logs.
+  logging: CLOUD_LOGGING_ONLY  # Use Cloud Logging only
 
+# Step 1: Deploy the slack-webhook-handler Cloud Function
 steps:
-  # Step 1: Deploy slack-webhook-handler function
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy-slack-webhook-handler'
     args:
-      - gcloud
-      - functions
-      - deploy
-      - slack-webhook-handler
-      - --region=us-central1
-      - --source=slack_webhook_handler
-      - --trigger-http
-      - --runtime=python310
-      - --entry-point=slack_webhook_handler
+      - 'gcloud'
+      - 'functions'
+      - 'deploy'
+      - 'slack-webhook-handler'  # Function name (ensure this matches the existing function name)
+      - '--region=us-central1'  # Specify the region for deployment
+      - '--source=slack_webhook_handler'  # Path to the directory containing the source code for slack-webhook-handler
+      - '--trigger-http'  # Trigger type (HTTP trigger for webhook)
+      - '--runtime=python310'  # Specify the runtime (Python 3.10 in this case)
+      - '--entry-point=slack_webhook_handler'  # Entry point function to use
+      - '--allow-unauthenticated'  # Allow unauthenticated invocations (this is needed for public HTTP endpoints)
 
-  # Step 2: Deploy slack-events function
+  # Step 2: Deploy the slack-events Cloud Function
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy-event-processor'
     args:
-      - gcloud
-      - functions
-      - deploy
-      - slack-events
-      - --region=us-central1
-      - --source=slack_events
-      - --trigger-http
-      - --runtime=python310
-      - --entry-point=slack_event_processor
+      - 'gcloud'
+      - 'functions'
+      - 'deploy'
+      - 'slack-events'  # Function name (ensure this matches the existing function name)
+      - '--region=us-central1'
+      - '--source=./slack_events'  # Path to the directory containing the function code
+      - '--trigger-http'  # Trigger type (HTTP trigger for webhook)
+      - '--runtime=python310'  # Specify the runtime (Python 3.10 in this case)
+      - '--entry-point=slack_event_processor'  # Entry point function to use
+      - '--allow-unauthenticated'  # Allow unauthenticated invocations (this is needed for public HTTP endpoints)
+
+# With this configuration, Cloud Build will redeploy both functions correctly.
