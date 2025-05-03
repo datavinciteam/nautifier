@@ -1,40 +1,38 @@
 options:
   logging: CLOUD_LOGGING_ONLY
 
-# Dynamic substitution variables
 substitutions:
-  _DEPLOY_WEBHOOK_HANDLER: "false"  # Set to "true" to deploy webhook handler
-  
+  _DEPLOY_WEBHOOK_HANDLER: "false"
+
 steps:
-  # Conditional step that only runs when _DEPLOY_WEBHOOK_HANDLER is "true"
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'deploy-webhook-handler'
+    entrypoint: 'bash'
     args:
-      - 'run'
-      - 'deploy'
-      - 'slack-webhook-handler'  
-      - '--source'
-      - './slack_webhook_handler'
-      - '--region'
-      - 'us-central1'
-      - '--platform'
-      - 'managed'
-      - '--allow-unauthenticated'
-    env:
-      - 'SKIP=$(_DEPLOY_WEBHOOK_HANDLER!=true)'
-    waitFor: ['-']  # Don't wait for any previous steps
+      - '-c'
+      - |
+        if [[ "$_DEPLOY_WEBHOOK_HANDLER" == "true" ]]; then
+          gcloud run deploy slack-webhook-handler \
+            --source=./slack_webhook_handler \
+            --region=us-central1 \
+            --platform=managed \
+            --allow-unauthenticated;
+        else
+          echo "Skipping slack-webhook-handler deployment.";
+        fi
+    waitFor: ['-']
 
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'deploy-event-processor'
     args:
       - 'run'
       - 'deploy'
-      - 'slack-event-processor'  # Using the name from your original YAML
+      - 'slack-events'
       - '--source'
-      - './slack_events'
+      - './slack_event_processor'
       - '--region'
       - 'us-central1'
       - '--platform'
       - 'managed'
       - '--allow-unauthenticated'
-    waitFor: ['-']  # Don't wait for any previous steps
+    waitFor: ['-']
