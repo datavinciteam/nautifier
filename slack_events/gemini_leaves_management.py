@@ -8,7 +8,7 @@ import re
 from pytz import timezone
 from google_sheets_writer import write_to_google_sheets
 
-MODEL = "gemini-2.5-pro-exp-03-25"
+MODEL = "gemini-1.5-flash"
 SHEET_ID = "1uhoqA6rPZJXWT-jiLLOaInodNc4FHxsxU_MNNRIGg1o"  # Replace with actual Sheet ID
 LEAVES_SHEET_NAME = "Leaves"  # Name of the tab inside Google Sheets
 
@@ -22,7 +22,7 @@ The information you extract will be used to **automatically fill up leave forms*
 Your job is to extract and return the following:
 1. **leave_type**: (casual, sick, half-day, festive). If someone is sick but requests a half-day, mark it as *sick*.
 2. **from_date & to_date**: Extract leave dates in `DD/MM/YYYY` format. If no dates are mentioned, assume today's date.
-3. **num_days**: Calculate the number of leave days.
+3. **num_days**: Calculate the number of leave days excluding Weekends if any (Saturday and Sunday). Each half-day counts 0.5 days.
 4. **reply**: Generate an **appropriate, professional message** acknowledging the leave.
 5. **reason_stated**: Reason stated by user for the leave. 
 

@@ -1,8 +1,14 @@
 options:
   logging: CLOUD_LOGGING_ONLY
-
+  
+# Dynamic substitution variables
+substitutions:
+  _DEPLOY_WEBHOOK_HANDLER: "false"  # Set to "true" to deploy webhook handler
+  
 steps:
+  # Conditional step that only runs when _DEPLOY_WEBHOOK_HANDLER is "true"
   - name: 'gcr.io/cloud-builders/gcloud'
+    id: 'deploy-webhook-handler'
     args:
       - 'run'
       - 'deploy'
@@ -14,12 +20,17 @@ steps:
       - '--platform'
       - 'managed'
       - '--allow-unauthenticated'
+    waitFor: ['-']  # Don't wait for any previous steps
+    options:
+      env:
+        - 'SKIP=$(_DEPLOY_WEBHOOK_HANDLER!=true)'
 
   - name: 'gcr.io/cloud-builders/gcloud'
+    id: 'deploy-event-processor'
     args:
       - 'run'
       - 'deploy'
-      - 'slack-event-processor' 
+      - 'slack-event-processor'  # Using the name from your original YAML
       - '--source'
       - './slack_events'
       - '--region'
@@ -27,3 +38,4 @@ steps:
       - '--platform'
       - 'managed'
       - '--allow-unauthenticated'
+    waitFor: ['-']  # Don't wait for any previous steps
