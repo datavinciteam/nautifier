@@ -1,33 +1,18 @@
 options:
   logging: CLOUD_LOGGING_ONLY
-  
-steps:
-  - name: 'gcr.io/cloud-builders/gcloud'
-    id: 'deploy-webhook-handler'
-    args:
-      - 'run'
-      - 'deploy'
-      - 'slack-webhook-handler'  
-      - '--source'
-      - './slack_webhook_handler'
-      - '--region'
-      - 'us-central1'
-      - '--platform'
-      - 'managed'
-      - '--allow-unauthenticated'
-    waitFor: ['-']  # Don't wait for any previous steps
 
-  - name: 'gcr.io/cloud-builders/gcloud'
+# Deploy slack_events Cloud Function
+steps:
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: 'deploy-event-processor'
     args:
-      - 'run'
+      - 'gcloud'
+      - 'functions'
       - 'deploy'
-      - 'slack-event-processor'  # Using the name from your original YAML
-      - '--source'
-      - './slack_events'
-      - '--region'
-      - 'us-central1'
-      - '--platform'
-      - 'managed'
+      - 'slack_events'  # Function name (matches the ID in your config)
+      - '--region=us-central1'
+      - '--source=.'  
+      - '--trigger-http'
+      - '--runtime=python310'
+      - '--entry-point=slack_event_processor'  # Points to your main function
       - '--allow-unauthenticated'
-    waitFor: ['-']  # Don't wait for any previous steps
