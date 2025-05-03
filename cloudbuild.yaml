@@ -2,20 +2,20 @@ options:
   logging: CLOUD_LOGGING_ONLY  # Use Cloud Logging only for build logs
 
 steps:
-  # Step 1: Deploy the slack-webhook-handler-2 function
-  - name: 'gcr.io/cloud-builders/gcloud'
-    id: 'deploy-slack-webhook-handler-2'
-    args:
-      - 'gcloud'
-      - 'functions'
-      - 'deploy'
-      - 'slack-webhook-handler-2'  # New function name
-      - '--region=us-central1'
-      - '--source=slack_webhook_handler'  # Path to the slack-webhook-handler folder
-      - '--runtime=python310'  # Python runtime for the function
-      - '--entry-point=slack_webhook_handler'  # Function entry point
-      - '--trigger-http'  # HTTP trigger
-      - '--allow-unauthenticated'  # Allow unauthenticated access
+  # # Step 1: Deploy the slack-webhook-handler-2 function
+  # - name: 'gcr.io/cloud-builders/gcloud'
+  #   id: 'deploy-slack-webhook-handler-2'
+  #   args:
+  #     - 'gcloud'
+  #     - 'functions'
+  #     - 'deploy'
+  #     - 'slack-webhook-handler-2'  # New function name
+  #     - '--region=us-central1'
+  #     - '--source=slack_webhook_handler'  # Path to the slack-webhook-handler folder
+  #     - '--runtime=python310'  # Python runtime for the function
+  #     - '--entry-point=slack_webhook_handler'  # Function entry point
+  #     - '--trigger-http'  # HTTP trigger
+  #     - '--allow-unauthenticated'  # Allow unauthenticated access
 
   # Step 2: Deploy the slack-events-2 function
   - name: 'gcr.io/cloud-builders/gcloud'

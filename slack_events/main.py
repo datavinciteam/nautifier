@@ -7,7 +7,7 @@ from gemini_leaves_management import handle_leaves_management_event
 from article_saver import handle_article_saving_event
 
 
-# Set up Google Cloud Logging
+# Set up Google Cloud Logging.
 client = google.cloud.logging.Client()
 client.setup_logging()
 logging.basicConfig(level=logging.INFO)  # Ensure logging is set
