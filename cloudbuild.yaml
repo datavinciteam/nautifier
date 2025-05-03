@@ -1,5 +1,5 @@
 options:
-  logging: CLOUD_LOGGING_ONLY  # Use Cloud Logging only for build logs
+  logging: CLOUD_LOGGING_ONLY  # Use Cloud Logging only for build logs.
 
 steps:
   # Step 1: Deploy slack-webhook-handler function
