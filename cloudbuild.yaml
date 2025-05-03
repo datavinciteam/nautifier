@@ -1,12 +1,7 @@
 options:
   logging: CLOUD_LOGGING_ONLY
-
-# Dynamic substitution variables
-substitutions:
-  _DEPLOY_WEBHOOK_HANDLER: "false"  # Set to "true" to deploy webhook handler
   
 steps:
-  # Conditional step that only runs when _DEPLOY_WEBHOOK_HANDLER is "true"
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'deploy-webhook-handler'
     args:
@@ -20,8 +15,6 @@ steps:
       - '--platform'
       - 'managed'
       - '--allow-unauthenticated'
-    env:
-      - 'SKIP=$(_DEPLOY_WEBHOOK_HANDLER!=true)'
     waitFor: ['-']  # Don't wait for any previous steps
 
   - name: 'gcr.io/cloud-builders/gcloud'

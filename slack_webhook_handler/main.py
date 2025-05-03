@@ -4,12 +4,8 @@ import logging
 import google.cloud.tasks_v2
 from google.cloud.tasks_v2 import HttpMethod
 import os
-import requests
-from dotenv import load_dotenv
 
-load_dotenv()
-
-# **Set up Google Cloud Logging**
+# Set up Google Cloud Logging
 client = google.cloud.logging.Client()
 client.setup_logging()
 
@@ -19,20 +15,6 @@ PROJECT_ID = os.getenv("GCP_PROJECT_ID", "viraj-lab")
 LOCATION = os.getenv("GCP_REGION", "us-central1")
 QUEUE_NAME = os.getenv("CLOUD_TASKS_QUEUE", "slack-event-queue")
 EVENT_HANDLER_URL = os.getenv("EVENT_HANDLER_URL", "https://us-central1-viraj-lab.cloudfunctions.net/slack_events")
-LOCAL_EVENTS_URL = os.getenv("LOCAL_EVENTS_URL", "http://localhost:8081")
-LOCAL_DEV_MODE = os.getenv("LOCAL_DEV_MODE", "false").lower() == "true"
-
-def call_local_event_handler(event_data):
-    """Directly calls the local slack_events function via HTTP."""
-    try:
-        headers = {'Content-Type': 'application/json'}
-        response = requests.post(LOCAL_EVENTS_URL, headers=headers, data=json.dumps(event_data))
-        response.raise_for_status()  # Raise an exception for bad status codes
-        logging.info(f"✅ Local slack_events called. Status: {response.status_code}, Response: {response.text}")
-        return True
-    except requests.exceptions.RequestException as e:
-        logging.error(f"❌ Error calling local slack_events: {e}")
-        return False
 
 def create_cloud_task(event_data):
     """
@@ -74,23 +56,14 @@ def slack_webhook_handler(request):
             event = payload.get("event", {})
             logging.info(f"📌 Event received: {json.dumps(event, indent=2)}")
 
-            # Conditionally process locally or via Cloud Tasks
-            if LOCAL_DEV_MODE:
-                logging.info("🛠️ Local Dev Mode: Calling local event handler.")
-                if call_local_event_handler(event):
-                    logging.info("✅ Local event handler called successfully.")
-                    return json.dumps({"status": "local_processed"}), 200
-                else:
-                    logging.error("❌ Error calling local event handler.")
-                    return json.dumps({"status": "local_processing_error"}), 500
+            # Production Mode: Queuing event in Cloud Tasks
+            logging.info("🚀 Production Mode: Queuing event in Cloud Tasks.")
+            if create_cloud_task(event):
+                logging.info("✅ Event successfully queued in Cloud Tasks.")
+                return json.dumps({"status": "queued"}), 200
             else:
-                logging.info("🚀 Production Mode: Queuing event in Cloud Tasks.")
-                if create_cloud_task(event):
-                    logging.info("✅ Event successfully queued in Cloud Tasks.")
-                    return json.dumps({"status": "queued"}), 200
-                else:
-                    logging.error("❌ Failed to queue event in Cloud Tasks.")
-                    return json.dumps({"status": "error creating task"}), 500
+                logging.error("❌ Failed to queue event in Cloud Tasks.")
+                return json.dumps({"status": "error creating task"}), 500
 
         logging.warning("⚠️ Unsupported event type received.")
         return json.dumps({"status": "unsupported_event"}), 200
