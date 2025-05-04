@@ -1,11 +1,11 @@
 import logging
 import json
 import requests
-from slack_utils import send_threaded_reply, get_slack_user_name
+from slack_utils import send_threaded_reply, get_slack_user_name, fetch_thread_history
 from secret_utils import get_secret
 from datetime import datetime
 import re
-from pytz import timezone
+from pytz import timezone, UTC
 from google_sheets_writer import write_to_google_sheets
 
 MODEL = "gemini-1.5-flash"
@@ -97,7 +97,7 @@ def handle_leaves_management_event(event):
     Handles leave announcements in Slack and logs them into Google Sheets.
     """
     try:
-        user_id = event.get("user")
+        user_id = event.get("user", "")
         channel = event.get("channel")
         thread_ts = event.get("ts")
         mentioned_text = event.get("text", "")
@@ -106,8 +106,12 @@ def handle_leaves_management_event(event):
         today_date = datetime.now(IST).strftime("%d/%m/%Y")
 
         slack_user_name = get_slack_user_name(user_id)
-
-        prompt = f"Today's date is {today_date}. Use this when required.\nUser's message: {mentioned_text}"
+        
+        # Build thread context
+        thread_history = fetch_thread_history(channel, thread_ts, exclude_ts=thread_ts)
+        thread_history.append(f"{slack_user_name}: {mentioned_text}")
+        full_prompt = "\n".join(thread_history).strip()
+        prompt = f"Today's date is {today_date}. Use this when required.\nUser's message: {full_prompt}"
         ai_response = get_gemini_response(prompt)
 
         if not ai_response or not isinstance(ai_response, list):

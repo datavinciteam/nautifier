@@ -20,30 +20,6 @@ WEEKLY_INDUSTRY_UPDATES_CHANNEL = "C08AEB7H0JE" #weekly-industy-updates channel 
 TAG_MANAGEMENT_CHANNEL = "C01SK3F164U"  # Tag Management Channel ID
 LEAVES_CHANNEL = NAUTIFIER_SANDBOX_CHANNEL #"C04HY5GR91B"  # Leaves Management Channel ID.
 
-# Temporary in-memory cache with timestamps to prevent duplicates
-EVENT_CACHE = {}
-EVENT_EXPIRY_TIME = 60  # Time in seconds to retain event timestamps before allowing reprocessing
-
-def is_duplicate_event(event_id):
-    """
-    Checks if the event is a duplicate using a short-lived cache.
-    """
-    current_time = time.time()
-
-    # Remove expired events
-    expired_keys = [key for key, ts in EVENT_CACHE.items() if current_time - ts > EVENT_EXPIRY_TIME]
-    for key in expired_keys:
-        del EVENT_CACHE[key]
-
-    # Check if event_id already exists
-    if event_id in EVENT_CACHE:
-        logging.info(f"🔄 Duplicate event detected: {event_id}. Skipping processing.")
-        return True
-
-    # Store event_id with timestamp
-    EVENT_CACHE[event_id] = current_time
-    return False
-
 def slack_event_processor(request):
     """
     Processes Slack events forwarded from Cloud Tasks.
@@ -62,14 +38,6 @@ def slack_event_processor(request):
         event = payload if "event" not in payload else payload.get("event", {})
         event_id = event.get("ts") or event.get("event_ts")  # Use event_ts if ts is missing
         channel = event.get("channel")
-
-        if not event_id:
-            logging.warning("⚠️ Event received without a valid event ID. Skipping.")
-            return json.dumps({"status": "missing_event_id"}), 200  # Return 200 to stop retries
-
-        # **🔹 Fix: Prevent duplicate processing**
-        if is_duplicate_event(event_id):
-            return json.dumps({"status": "duplicate_skipped"}), 200  # Return 200 to avoid retries
 
         logging.info(f"✅ Processing event in channel: {channel}, Event ID: {event_id}")
 
