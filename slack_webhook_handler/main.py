@@ -5,7 +5,7 @@ import google.cloud.tasks_v2
 from google.cloud.tasks_v2 import HttpMethod
 import os
 
-# Set up Google Cloud Logging
+# Set up Google Cloud Logging.
 client = google.cloud.logging.Client()
 client.setup_logging()
 
@@ -14,7 +14,10 @@ tasks_client = google.cloud.tasks_v2.CloudTasksClient()
 PROJECT_ID = os.getenv("GCP_PROJECT_ID", "viraj-lab")
 LOCATION = os.getenv("GCP_REGION", "us-central1")
 QUEUE_NAME = os.getenv("CLOUD_TASKS_QUEUE", "slack-event-queue")
-EVENT_HANDLER_URL = os.getenv("EVENT_HANDLER_URL", "https://us-central1-viraj-lab.cloudfunctions.net/slack_events")
+#EVENT_HANDLER_URL = os.getenv("EVENT_HANDLER_URL", "https://us-central1-viraj-lab.cloudfunctions.net/slack_events")
+# EVENT_HANDLER_URL = os.getenv("EVENT_HANDLER_URL", "https://goat-exciting-neatly.ngrok-free.app")
+EVENT_HANDLER_URL = os.getenv("EVENT_HANDLER_URL", "https://us-central1-viraj-lab.cloudfunctions.net/slack-event-processor")
+
 
 def create_cloud_task(event_data):
     """
