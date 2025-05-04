@@ -1,20 +1,16 @@
+options:
+  logging: CLOUD_LOGGING_ONLY  # This tells Cloud Build to use Cloud Logging
+
 steps:
-  # Step 1: Set up the build environment using Google's Cloud SDK image
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    id: 'deploy-slack-events'
+  - name: 'gcr.io/cloud-builders/gcloud'
     args:
       - 'gcloud'
       - 'functions'
       - 'deploy'
-      - 'slack-events'  # Function name
-      - '--region=us-central1'  # Adjust region as necessary
-      - '--source=slack_events'  # Path to the slack-events function source code
-      - '--runtime=python310'  # Specify the Python runtime (adjust based on your needs)
-      - '--trigger-http'  # Set trigger type to HTTP request (webhook)
-      - '--allow-unauthenticated'  # Allow unauthenticated invocations (adjust based on your use case)
-      - '--entry-point=slack_event_processor'  # Name of the function within your code to be executed
-
-# Optional: Additional steps for testing or logging before deploying
-# You can also specify a test step, such as running unit tests or linting the code, before deploying.
-
-# For logging configuration or other actions, add other steps if necessary.
+      - 'slack-events'
+      - '--region=us-central1'
+      - '--source=slack_events'
+      - '--trigger-http'
+      - '--runtime=python310'
+      - '--entry-point=slack_event_processor'
+      - '--allow-unauthenticated'
