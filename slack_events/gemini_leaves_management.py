@@ -5,7 +5,7 @@ from slack_utils import send_threaded_reply, get_slack_user_name, fetch_thread_h
 from secret_utils import get_secret
 from datetime import datetime
 import re
-from pytz import timezone, UTC
+from pytz import timezone
 from google_sheets_writer import write_to_google_sheets
 
 MODEL = "gemini-1.5-flash"
@@ -15,11 +15,11 @@ LEAVES_SHEET_NAME = "Leaves"  # Name of the tab inside Google Sheets
 SYSTEM_INSTRUCTION = { 
     "parts": [
         {
-            "text": """You are Nautifier, a Slack bot added in the leaves channel where people announce their leaves.
+            "text": """You are Nautifier, a Slack bot added in the leaves channel where people announce their leaves so that they don't have to fill the leave form manually.
 Messages could be for sick leave, casual leave, festive leaves, half days, etc.
 The information you extract will be used to **automatically fill up leave forms**.
 
-Your job is to extract and return the following:
+Your job is to extract and return the following from the whole thread:
 1. **leave_type**: (casual, sick, half-day, festive). If someone is sick but requests a half-day, mark it as *sick*.
 2. **from_date & to_date**: Extract leave dates in `DD/MM/YYYY` format. If no dates are mentioned, assume today's date.
 3. **num_days**: Calculate the number of leave days excluding Weekends if any (Saturday and Sunday). Each half-day counts 0.5 days.
@@ -35,7 +35,7 @@ Your job is to extract and return the following:
     "Noted. Wishing you a speedy recovery!",
     { "leave_type": "sick", "from_date": "10/02/2025", "to_date": "10/02/2025", "num_days": 1, "reason_stated": "Feeling nauseous" }
 ]
-If no leave is mentioned, respond: 'I cannot determine if a leave form fill-up is required.' """
+If you cannot determine leaves details from the messages, respond: 'I cannot determine if a leave form fill-up is required.' """
         }
     ]
 }
@@ -44,7 +44,7 @@ GENERATION_CONFIG = {
     "temperature": 1.20,
     "topP": 0.95,
     "topK": 64,
-    "maxOutputTokens": 2048,
+    "maxOutputTokens": 512,
     "responseMimeType": "text/plain",
 }
 
