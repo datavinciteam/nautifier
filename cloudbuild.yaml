@@ -1,16 +1,15 @@
-options:
-  logging: CLOUD_LOGGING_ONLY  # This tells Cloud Build to use Cloud Logging
-
 steps:
-  - name: 'gcr.io/cloud-builders/gcloud'
-    args:
-      - 'gcloud'
-      - 'functions'
-      - 'deploy'
-      - 'slack-events'
-      - '--region=us-central1'
-      - '--source=slack_events'
-      - '--trigger-http'
-      - '--runtime=python310'
-      - '--entry-point=slack_event_processor'
-      - '--allow-unauthenticated'
+- name: 'gcr.io/cloud-builders/gcloud'
+  args:
+  - functions
+  - deploy
+  - slack-event-processor
+  - --gen2
+  - --region=us-central1
+  - --runtime=python310
+  - --source=slack_events
+  - --entry-point=slack_event_processor
+  - --trigger-http
+  - --allow-unauthenticated
+options:
+  logging: CLOUD_LOGGING_ONLY
