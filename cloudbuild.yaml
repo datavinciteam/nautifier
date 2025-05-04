@@ -1,33 +1,20 @@
-options:
-  logging: CLOUD_LOGGING_ONLY  # Use Cloud Logging only for build logs
-
 steps:
-  # # Step 1: Deploy the slack-webhook-handler-2 function
-  # - name: 'gcr.io/cloud-builders/gcloud'
-  #   id: 'deploy-slack-webhook-handler-2'
-  #   args:
-  #     - 'gcloud'
-  #     - 'functions'
-  #     - 'deploy'
-  #     - 'slack-webhook-handler-2'  # New function name
-  #     - '--region=us-central1'
-  #     - '--source=slack_webhook_handler'  # Path to the slack-webhook-handler folder
-  #     - '--runtime=python310'  # Python runtime for the function
-  #     - '--entry-point=slack_webhook_handler'  # Function entry point
-  #     - '--trigger-http'  # HTTP trigger
-  #     - '--allow-unauthenticated'  # Allow unauthenticated access
-
-  # Step 2: Deploy the slack-events-2 function
-  - name: 'gcr.io/cloud-builders/gcloud'
-    id: 'deploy-slack-events-2'
+  # Step 1: Set up the build environment using Google's Cloud SDK image
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy-slack-events'
     args:
       - 'gcloud'
       - 'functions'
       - 'deploy'
-      - 'slack-events-2'  # New function name
-      - '--region=us-central1'
-      - '--source=slack_events'  # Path to the slack-events folder
-      - '--runtime=python310'  # Python runtime for the function
-      - '--entry-point=slack_event_processor'  # Function entry point
-      - '--trigger-http'  # HTTP trigger
-      - '--allow-unauthenticated'  # Allow unauthenticated access
+      - 'slack-events'  # Function name
+      - '--region=us-central1'  # Adjust region as necessary
+      - '--source=slack_events'  # Path to the slack-events function source code
+      - '--runtime=python310'  # Specify the Python runtime (adjust based on your needs)
+      - '--trigger-http'  # Set trigger type to HTTP request (webhook)
+      - '--allow-unauthenticated'  # Allow unauthenticated invocations (adjust based on your use case)
+      - '--entry-point=slack_event_processor'  # Name of the function within your code to be executed
+
+# Optional: Additional steps for testing or logging before deploying
+# You can also specify a test step, such as running unit tests or linting the code, before deploying.
+
+# For logging configuration or other actions, add other steps if necessary.
