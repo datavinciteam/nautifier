@@ -79,7 +79,7 @@ If you cannot determine the intent or details, respond with: 'I cannot determine
 }
 
 GENERATION_CONFIG = {
-    "temperature": 1.20,
+    "temperature": 1.0,
     "topP": 0.95,
     "topK": 64,
     "maxOutputTokens": 512,
