@@ -70,10 +70,11 @@ Your job is to:
    - **reply**: Generate a professional message acknowledging the cancellation.
 
 ### Thread Handling:
-- Treat the thread as a conversation. If a user posts a tentative leave (e.g., 'might be on leave on 6th May') and later confirms (e.g., 'confirming leaves'), interpret it as a confirmed leave request.
-- Combine all thread messages to determine the intent (leave request or cancellation).
+- Treat the thread as a brunch. Prioritize the latest message for determining intent (e.g., confirmation or cancellation).
+- If a user posts a tentative leave (e.g., 'might be on leave on 6th May') and later confirms (e.g., 'confirming leaves'), interpret it as a confirmed leave request.
+- Combine all thread messages to determine the intent, but give higher weight to the most recent message.
 
-If you cannot determine the intent or details, respond with: 'I cannot determine if a leave form fill-up is required.'"""
+If you cannot determine the intent or details, respond with: 'Unable to determine if this is a leave request or cancellation.'"""
         }
     ]
 }
@@ -86,6 +87,22 @@ GENERATION_CONFIG = {
     "responseMimeType": "text/plain",
 }
 
+def is_valid_date(date_str):
+    """
+    Validates if a date string is in DD/MM/YYYY format and is a valid date.
+
+    Args:
+        date_str (str): Date in DD/MM/YYYY format.
+
+    Returns:
+        bool: True if valid, False otherwise.
+    """
+    try:
+        datetime.strptime(date_str, "%d/%m/%Y")
+        return True
+    except ValueError:
+        return False
+
 def get_gemini_response(prompt):
     """
     Fetches a response from Gemini AI using function calling.
@@ -96,7 +113,7 @@ def get_gemini_response(prompt):
 
         payload = {
             "contents": [{"role": "USER", "parts": [{"text": prompt}]}],
-            "system_instruction": SYSTEM_INSTRUCTION,
+            "system_instruction": SYSTEM_IN-LeavesSTRUCTION,
             "generation_config": GENERATION_CONFIG,
             "tools": FUNCTION_DECLARATIONS["tools"]
         }
@@ -110,12 +127,12 @@ def get_gemini_response(prompt):
 
         candidates = data.get("candidates", [])
         if not candidates:
-            return ["I cannot determine if a leave form fill-up is required."]
+            return ["Incomplete response from the AI service. Please try again or tag Prateek for assistance."]
 
         content = candidates[0].get("content", {})
         parts = content.get("parts", [])
         if not parts:
-            return ["I cannot determine if a leave form fill-up is required."]
+            return ["Incomplete response from the AI service. Please try again or tag Prateek for assistance."]
 
         for part in parts:
             if "functionCall" in part:
@@ -137,15 +154,15 @@ def get_gemini_response(prompt):
                     }]
 
         response_text = parts[-1].get("text", "").strip()
-        if "I cannot determine if a leave form fill-up is required" in response_text:
-            return ["I cannot determine if a leave form fill-up is required."]
+        if "Unable to determine if this is a leave request or cancellation" in response_text:
+            return ["Unable to determine if this is a leave request or cancellation. Please clarify and try again, or tag Prateek for assistance."]
 
         logging.warning("⚠️ No function call or valid response found.")
-        return ["I cannot determine if a leave form fill-up is required."]
+        return ["Unable to determine if this is a leave request or cancellation. Please clarify and try again, or tag Prateek for assistance."]
 
     except requests.exceptions.RequestException as e:
         logging.error(f"❌ Error calling Gemini API: {e}")
-        return ["I cannot determine if a leave form fill-up is required."]
+        return ["Failed to process the request due to an issue with the AI service. Please try again or tag Prateek for assistance."]
 
 def handle_leaves_management_event(event):
     """
@@ -171,26 +188,28 @@ def handle_leaves_management_event(event):
         prompt = f"Today's date is {today_date}. Use this when required.\nThe following messages are part of a Slack thread:\n{thread_context}"
         ai_response = get_gemini_response(prompt)
 
-        if not ai_response or ai_response[0] == "I cannot determine if a leave form fill-up is required.":
-            send_threaded_reply(channel, thread_ts, "I cannot determine if a leave form fill-up is required.")
+        if not ai_response:
+            send_threaded_reply(channel, thread_ts, "An unexpected error occurred. Please try again or tag  for assistance.")
+            return json.dumps({"status": "processing_failed"}), 200
+
+        if isinstance(ai_response[0], str) and ("Please try again or tag Prateek" in ai_response[0]):
+            send_threaded_reply(channel, thread_ts, ai_response[0])
             return json.dumps({"status": "processing_failed"}), 200
 
         # Handle leave request
         if ai_response[0] != "cancel":
             reply_message = ai_response[0]
             leave_entries = ai_response[1:]
+            slack_message = f"{reply_message}\n\n***Leave Details:***\n"
+            all_writes_successful = True
 
-            slack_message = f"{reply_message}\n\n ***Leave Details:***\n"
             for leave in leave_entries:
-                slack_message += (
-                    f"Type: {leave['leave_type'].capitalize()}\n"
-                    f"Duration: {leave['num_days']} days\n"
-                    f"Dates: {leave['from_date']} to {leave['to_date']}\n"
-                    f"Reason: {leave.get('reason_stated', 'Not provided')}\n"
-                    f"---\n\n"
-                )
+                if not (is_valid_date(leave["from_date"]) and is_valid_date(leave["to_date"])):
+                    send_threaded_reply(channel, thread_ts, "Invalid date format in leave request. Please use DD/MM/YYYY and try again, or tag Prateek for assistance.")
+                    return json.dumps({"status": "failed"}), 400
 
-                write_to_google_sheets(SHEET_ID, LEAVES_SHEET_NAME, [
+                # Attempt to write to Google Sheets
+                success = write_to_google_sheets(SHEET_ID, LEAVES_SHEET_NAME, [
                     datetime.now(IST).strftime("%d/%m/%Y %H:%M:%S"),
                     slack_user_name,
                     leave["leave_type"],
@@ -200,19 +219,40 @@ def handle_leaves_management_event(event):
                     leave.get("reason_stated", "Not provided")
                 ])
 
-            send_threaded_reply(channel, thread_ts, slack_message)
-            return json.dumps({"status": "logged"}), 200
+                if success:
+                    slack_message += (
+                        f"**Type**: {leave['leave_type'].capitalize()}\n"
+                        f"**Duration**: {leave['num_days']} days\n"
+                        f"**Dates**: {leave['from_date']} to {leave['to_date']}\n"
+                        f"**Reason**: {leave.get('reason_stated', 'Not provided')}\n"
+                        f"_To cancel, reply in this thread with 'cancel leave for DD/MM/YYYY to DD/MM/YYYY'_\n"
+                        f"\n---\n"
+                    )
+                else:
+                    all_writes_successful = False
+                    logging.error(f"❌ Failed to write leave for {slack_user_name} to Google Sheets: {leave}")
+
+            if all_writes_successful:
+                send_threaded_reply(channel, thread_ts, slack_message)
+                return json.dumps({"status": "logged"}), 200
+            else:
+                send_threaded_reply(channel, thread_ts, "An error occurred while logging the leave to Google Sheets. Please try again or tag Prateek for assistance.")
+                return json.dumps({"status": "failed"}), 500
 
         # Handle cancellation
         else:
-            default_reply = ai_response[1]  # AI-generated reply, e.g., "Leave for 07/05/2025 has been cancelled."
+            default_reply = ai_response[1]
             cancel_details = ai_response[2]
             from_date = cancel_details["from_date"]
             to_date = cancel_details["to_date"]
 
-            # Delete the row from Google Sheets (only if UPCOMING)
+            if not (is_valid_date(from_date) and is_valid_date(to_date)):
+                send_threaded_reply(channel, thread_ts, "Invalid date format in cancellation request. Please use DD/MM/YYYY and try again, or tag Prateek for assistance.")
+                return json.dumps({"status": "failed"}), 400
+
+            # Delete the row from Google Sheets
             success, message = delete_row_from_google_sheets(SHEET_ID, LEAVES_SHEET_NAME, slack_user_name, from_date, to_date)
-            logging.info(f"Cancellation attempt for {slack_user_name} from {from_date} to {to_date}: Success={success}, Message={message}")
+            logging.info(f"📝 Cancellation attempt for {slack_user_name} from {from_date} to {to_date}: Success={success}, Message={message}")
 
             # Use the AI-generated reply only if deletion succeeds; otherwise, use the message from delete_row_from_google_sheets
             final_reply = default_reply if success else message
@@ -222,4 +262,5 @@ def handle_leaves_management_event(event):
 
     except Exception as e:
         logging.error(f"❌ Error in handle_leaves_management_event: {e}")
+        send_threaded_reply(channel, thread_ts, "An unexpected error occurred. Please try again or tag Prateek for assistance.")
         return json.dumps({"error": str(e)}), 500
