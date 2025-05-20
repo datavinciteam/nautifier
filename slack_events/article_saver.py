@@ -67,7 +67,7 @@ def clean_slack_text(text):
 # --- Handle Slack message and process Gemini response ---
 def get_gemini_response_with_functions(prompt):
     try:
-        MODEL = "gemini-1.5-pro-latest"
+        MODEL = "gemini-1.5-flash"
         SYSTEM_INSTRUCTION = {
             "parts": [
                 {
