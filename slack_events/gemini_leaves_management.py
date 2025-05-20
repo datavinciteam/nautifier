@@ -113,7 +113,7 @@ def get_gemini_response(prompt):
 
         payload = {
             "contents": [{"role": "USER", "parts": [{"text": prompt}]}],
-            "system_instruction": SYSTEM_IN-LeavesSTRUCTION,
+            "system_instruction": SYSTEM_INSTRUCTION,
             "generation_config": GENERATION_CONFIG,
             "tools": FUNCTION_DECLARATIONS["tools"]
         }
