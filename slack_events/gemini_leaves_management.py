@@ -221,11 +221,11 @@ def handle_leaves_management_event(event):
 
                 if success:
                     slack_message += (
-                        f"**Type**: {leave['leave_type'].capitalize()}\n"
-                        f"**Duration**: {leave['num_days']} days\n"
-                        f"**Dates**: {leave['from_date']} to {leave['to_date']}\n"
-                        f"**Reason**: {leave.get('reason_stated', 'Not provided')}\n"
-                        f"_To cancel, reply in this thread with 'cancel leave for DD/MM/YYYY to DD/MM/YYYY'_\n"
+                        f"Type: {leave['leave_type'].capitalize()}\n"
+                        f"Duration: {leave['num_days']} days\n"
+                        f"Dates: {leave['from_date']} to {leave['to_date']}\n"
+                        f"Reason: {leave.get('reason_stated', 'Not provided')}\n\n"
+                        f"_To cancel, reply in this thread with 'cancel leave for <date>'_\n"
                         f"\n---\n"
                     )
                 else:
