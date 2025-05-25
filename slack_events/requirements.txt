@@ -5,3 +5,4 @@ pytz
 google-cloud-tasks
 gspread
 google-auth
+google-cloud-firestore
