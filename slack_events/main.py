@@ -12,8 +12,9 @@ client.setup_logging()
 logging.basicConfig(level=logging.INFO)
 logging.info("✅ Logging initialized successfully in slack_events!")
 
-# Firestore setup
-db = firestore.Client()
+# Firestore setup with explicit database name
+PROJECT_ID = os.getenv("GCP_PROJECT_ID", "viraj-lab")
+db = firestore.Client(project=PROJECT_ID, database="nautifier-db")
 
 # Channel IDs
 NAUTIFIER_SANDBOX = "C07R5QU0LKZ"
