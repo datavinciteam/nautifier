@@ -96,7 +96,8 @@ If you cannot determine the intent or details, respond with a detailed reason wh
 - "I couldn't find any specific dates in your message."
 - "The leave type is unclear. Please specify if it's casual, sick, half-day, or festive."
 - "The message is ambiguous. Please confirm if this is a leave request or cancellation."
-Always suggest how the user can improve their request, e.g., "Please include specific dates in DD/MM/YYYY format and clarify the leave type.""""
+Always suggest how the user can improve their request, e.g., "Please include specific dates in DD/MM/YYYY format and clarify the leave type."
+"""
         }
     ]
 }
