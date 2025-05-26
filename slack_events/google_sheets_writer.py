@@ -34,21 +34,21 @@ def write_to_google_sheets(sheet_id, sheet_name, data):
         logging.error(f"❌ Error writing to Google Sheets for sheet_id={sheet_id}, sheet_name={sheet_name}, data={data}: {e}")
         return False
 
-# Function to delete a row from Google Sheets
+# Function to delete rows from Google Sheets
 def delete_row_from_google_sheets(sheet_id, sheet_name, employee_name, from_date, to_date):
     """
-    Deletes a row from the specified Google Sheet matching the employee, from_date, and to_date,
+    Deletes rows from the specified Google Sheet matching the employee and overlapping date range,
     if the leave is UPCOMING or starts today, but not if REDEEMED.
 
     Args:
         sheet_id (str): The Google Sheet ID.
         sheet_name (str): The name of the worksheet.
         employee_name (str): The name of the employee.
-        from_date (str): The start date of the leave in DD/MM/YYYY format.
-        to_date (str): The end date of the leave in DD/MM/YYYY format.
+        from_date (str): The start date of the leave to cancel in DD/MM/YYYY format.
+        to_date (str): The end date of the leave to cancel in DD/MM/YYYY format.
 
     Returns:
-        tuple: (bool, str) - (True if a row was deleted, False otherwise; a | message explaining the result).
+        tuple: (bool, str) - (True if at least one row was deleted, False otherwise; a message explaining the result).
     """
     try:
         client = authenticate_google_sheets()
@@ -64,35 +64,57 @@ def delete_row_from_google_sheets(sheet_id, sheet_name, employee_name, from_date
         IST = timezone("Asia/Kolkata")
         today_date = datetime.now(IST).strftime("%d/%m/%Y")
 
-        # Convert from_date to datetime for comparison
-        from_date_dt = datetime.strptime(from_date, "%d/%m/%Y")
+        # Convert dates to datetime for comparison
+        cancel_from_dt = datetime.strptime(from_date, "%d/%m/%Y")
+        cancel_to_dt = datetime.strptime(to_date, "%d/%m/%Y")
         today_date_dt = datetime.strptime(today_date, "%d/%m/%Y")
 
-        # Identify the row to delete
-        row_to_delete = None
+        # Identify rows to delete
+        rows_to_delete = []
         for i, row in enumerate(all_rows):
             if i == 0:  # Skip header row
                 continue
-            if (len(row) >= 8 and  # Ensure row has enough columns (up to Status)
-                row[1].strip() == employee_name.strip() and  # Employee (column B)
-                row[3].strip() == from_date.strip() and      # From date (column D)
-                row[4].strip() == to_date.strip()):          # To date (column E)
+            if len(row) < 8:  # Ensure row has enough columns (up to Status)
+                continue
+
+            # Check if the row matches the employee
+            if row[1].strip() != employee_name.strip():
+                continue
+
+            # Parse the row's date range
+            row_from_date = row[3].strip()
+            row_to_date = row[4].strip()
+            try:
+                row_from_dt = datetime.strptime(row_from_date, "%d/%m/%Y")
+                row_to_dt = datetime.strptime(row_to_date, "%d/%m/%Y")
+            except ValueError:
+                logging.warning(f"📝 Invalid date format in row {i+1}: {row_from_date} to {row_to_date}. Skipping.")
+                continue
+
+            # Check if the row's date range overlaps with the cancellation range
+            if (row_from_dt <= cancel_to_dt and row_to_dt >= cancel_from_dt):
+                # Check if the leave is cancellable (not REDEEMED and starts today or in the future)
                 if row[7].strip().upper() == "REDEEMED":
-                    logging.info(f"📝 Cannot delete leave for {employee_name} from {from_date} to {to_date}: status is REDEEMED.")
-                    return False, "Cannot cancel a past leave (status: REDEEMED)."
-                if from_date_dt >= today_date_dt or row[7].strip().upper() == "UPCOMING":
-                    row_to_delete = i + 1  # 1-based index for gspread
-                    break
+                    logging.info(f"📝 Cannot delete leave for {employee_name} from {row_from_date} to {row_to_date}: status is REDEEMED.")
+                    continue
+                if row_from_dt < today_date_dt and row[7].strip().upper() != "UPCOMING":
+                    logging.info(f"📝 Cannot delete leave for {employee_name} from {row_from_date} to {row_to_date}: leave is in the past.")
+                    continue
 
-        if row_to_delete is None:
-            logging.info(f"📝 No matching cancellable leave found for {employee_name} from {from_date} to {to_date} in sheet_id={sheet_id}, sheet_name={sheet_name}.")
-            return False, "No matching leave found to cancel (must be today or upcoming, not redeemed)."
+                rows_to_delete.append(i + 1)  # 1-based index for gspread
 
-        # Delete the row
-        sheet.delete_rows(row_to_delete)
-        logging.info(f"✅ Deleted row for {employee_name} from {from_date} to {to_date} at row {row_to_delete} in sheet_id={sheet_id}, sheet_name={sheet_name}.")
-        return True, f"Leave for {from_date} to {to_date} has been cancelled."
+        if not rows_to_delete:
+            logging.info(f"📝 No matching cancellable leaves found for {employee_name} from {from_date} to {to_date} in sheet_id={sheet_id}, sheet_name={sheet_name}.")
+            return False, "No matching leaves found to cancel (must be today or upcoming, not redeemed)."
+
+        # Delete rows in reverse order to avoid index shifting
+        rows_to_delete.sort(reverse=True)
+        for row_idx in rows_to_delete:
+            sheet.delete_rows(row_idx)
+            logging.info(f"✅ Deleted row for {employee_name} from {all_rows[row_idx-1][3]} to {all_rows[row_idx-1][4]} at row {row_idx} in sheet_id={sheet_id}, sheet_name={sheet_name}.")
+
+        return True, f"Leaves overlapping {from_date} to {to_date} have been cancelled."
 
     except Exception as e:
-        logging.error(f"❌ Error deleting row from Google Sheets for sheet_id={sheet_id}, sheet_name={sheet_name}, employee={employee_name}, from_date={from_date}, to_date={to_date}: {e}")
-        return False, f"Error cancelling leave: {str(e)}"
+        logging.error(f"❌ Error deleting rows from Google Sheets for sheet_id={sheet_id}, sheet_name={sheet_name}, employee={employee_name}, from_date={from_date}, to_date={to_date}: {e}")
+        return False, f"Error cancelling leaves: {str(e)}"

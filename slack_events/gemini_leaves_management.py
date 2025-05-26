@@ -19,18 +19,28 @@ FUNCTION_DECLARATIONS = {
             "function_declarations": [
                 {
                     "name": "process_leave_request",
-                    "description": "Process a leave request and extract structured leave details.",
+                    "description": "Process a leave request and extract structured leave details. Returns a list of leave entries for non-continuous dates.",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "leave_type": {"type": "string", "enum": ["casual", "sick", "half-day", "festive"], "description": "Type of leave"},
-                            "from_date": {"type": "string", "description": "Start date in DD/MM/YYYY format"},
-                            "to_date": {"type": "string", "description": "End date in DD/MM/YYYY format"},
-                            "num_days": {"type": "number", "description": "Number of leave days, excluding weekends, half-day counts as 0.5"},
-                            "reason_stated": {"type": "string", "description": "Reason for the leave, if provided"},
+                            "leave_entries": {
+                                "type": "array",
+                                "description": "List of leave entries, each representing a continuous date range",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "leave_type": {"type": "string", "enum": ["casual", "sick", "half-day", "festive"], "description": "Type of leave"},
+                                        "from_date": {"type": "string", "description": "Start date in DD/MM/YYYY format"},
+                                        "to_date": {"type": "string", "description": "End date in DD/MM/YYYY format"},
+                                        "num_days": {"type": "number", "description": "Number of leave days, excluding weekends, half-day counts as 0.5"},
+                                        "reason_stated": {"type": "string", "description": "Reason for the leave, if provided"}
+                                    },
+                                    "required": ["leave_type", "from_date", "to_date", "num_days"]
+                                }
+                            },
                             "reply": {"type": "string", "description": "Friendly reply message acknowledging the leave"}
                         },
-                        "required": ["leave_type", "from_date", "to_date", "num_days", "reply"]
+                        "required": ["leave_entries", "reply"]
                     }
                 },
                 {
@@ -60,14 +70,22 @@ Messages could be for sick leave, casual leave, festive leaves, half days, etc. 
 Your job is to:
 1. Detect if the thread is a leave request or a cancellation request.
 2. For leave requests, call the `process_leave_request` function to extract:
-   - **leave_type**: (casual, sick, half-day, festive). If someone is sick but requests a half-day, mark it as *sick*. Default to *casual* if unclear.
-   - **from_date & to_date**: Extract leave dates in `DD/MM/YYYY` format. If no dates are mentioned, assume today's date. If the year is not specified, assume the current year or the next year if the date has passed.
-   - **num_days**: Calculate the number of leave days, excluding weekends (Saturday and Sunday). Each half-day counts as 0.5 days.
-   - **reply**: Generate a professional message acknowledging the leave.
-   - **reason_stated**: Reason stated by the user for the leave, if provided.
+   - **leave_entries**: A list of leave entries, where each entry represents a continuous date range.
+     - Group dates into continuous ranges (e.g., 12th and 13th become one entry, but 10th and 12th are separate).
+     - For each entry:
+       - **leave_type**: (casual, sick, half-day, festive). If someone is sick but requests a half-day, mark it as *sick*. Default to *casual* if unclear.
+       - **from_date & to_date**: Extract leave dates in `DD/MM/YYYY` format for each continuous range. If no dates are mentioned, assume today's date. If the year is not specified, assume the current year or the next year if the date has passed.
+       - **num_days**: Calculate the number of leave days for each entry, excluding weekends (Saturday and Sunday). Each half-day counts as 0.5 days.
+       - **reason_stated**: Reason stated by the user for the leave, if provided (same for all entries).
+   - **reply**: Generate a professional message acknowledging the leave (e.g., "Hi [User], your leave request has been noted. Thanks!").
 3. For cancellation requests, call the `cancel_leave_request` function to extract:
    - **from_date & to_date**: The dates of the leave to cancel in `DD/MM/YYYY` format.
    - **reply**: Generate a friendly message acknowledging the cancellation.
+
+### Date Grouping Rules:
+- Group consecutive dates into a single entry (e.g., 12th and 13th become one entry: 12th to 13th).
+- Non-consecutive dates should be separate entries (e.g., 10th, 12th, 13th, 18th become three entries: 10th, 12th-13th, 18th).
+- For a request like "2 days leave on 30th May and 16th June," create two entries: one for 30th May (1 day) and one for 16th June (1 day).
 
 ### Thread Handling:
 - Treat the thread as a brunch. Prioritize the latest message for determining intent (e.g., confirmation or cancellation).
@@ -140,13 +158,7 @@ def get_gemini_response(prompt):
                 function_name = function_call.get("name")
                 args = function_call.get("args", {})
                 if function_name == "process_leave_request":
-                    return [args.get("reply"), {
-                        "leave_type": args.get("leave_type"),
-                        "from_date": args.get("from_date"),
-                        "to_date": args.get("to_date"),
-                        "num_days": args.get("num_days"),
-                        "reason_stated": args.get("reason_stated", "Not provided")
-                    }]
+                    return [args.get("reply"), args.get("leave_entries", [])]
                 elif function_name == "cancel_leave_request":
                     return ["cancel", args.get("reply"), {
                         "from_date": args.get("from_date"),
@@ -189,7 +201,7 @@ def handle_leaves_management_event(event):
         ai_response = get_gemini_response(prompt)
 
         if not ai_response:
-            send_threaded_reply(channel, thread_ts, "An unexpected error occurred. Please try again or tag  for assistance.")
+            send_threaded_reply(channel, thread_ts, "An unexpected error occurred. Please try again or tag for assistance.")
             return json.dumps({"status": "processing_failed"}), 200
 
         if isinstance(ai_response[0], str) and ("Please try again or tag Prateek" in ai_response[0]):
@@ -199,7 +211,7 @@ def handle_leaves_management_event(event):
         # Handle leave request
         if ai_response[0] != "cancel":
             reply_message = ai_response[0]
-            leave_entries = ai_response[1:]
+            leave_entries = ai_response[1]
             slack_message = f"{reply_message}\n\n***Leave Details:***\n"
             all_writes_successful = True
 
