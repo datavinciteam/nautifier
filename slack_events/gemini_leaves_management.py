@@ -45,25 +45,15 @@ FUNCTION_DECLARATIONS = {
                 },
                 {
                     "name": "cancel_leave_request",
-                    "description": "Cancel a previously logged leave request by specifying specific dates to cancel.",
+                    "description": "Cancel a previously logged leave request by specifying an exact date range to cancel.",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "cancel_dates": {
-                                "type": "array",
-                                "description": "List of date ranges to cancel, each with a from_date and to_date",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "from_date": {"type": "string", "description": "Start date to cancel in DD/MM/YYYY format"},
-                                        "to_date": {"type": "string", "description": "End date to cancel in DD/MM/YYYY format"}
-                                    },
-                                    "required": ["from_date", "to_date"]
-                                }
-                            },
+                            "from_date": {"type": "string", "description": "Start date to cancel in DD/MM/YYYY format"},
+                            "to_date": {"type": "string", "description": "End date to cancel in DD/MM/YYYY format"},
                             "reply": {"type": "string", "description": "Friendly reply message acknowledging the cancellation"}
                         },
-                        "required": ["cancel_dates", "reply"]
+                        "required": ["from_date", "to_date", "reply"]
                     }
                 }
             ]
@@ -89,10 +79,11 @@ Your job is to:
        - **reason_stated**: Reason stated by the user for the leave, if provided (same for all entries).
    - **reply**: Generate a professional message acknowledging the leave (e.g., "Hi [User], your leave request has been noted. Thanks!").
 3. For cancellation requests, call the `cancel_leave_request` function to extract:
-   - **cancel_dates**: A list of date ranges to cancel, where each range has a from_date and to_date. Treat the user's cancellation request as a list of specific dates or continuous ranges:
-     - If the user specifies a range (e.g., "cancel leave for 01/06/2025 to 21/06/2025"), and the dates are non-continuous, split it into separate entries (e.g., 01/06/2025 to 01/06/2025 and 21/06/2025 to 21/06/2025).
-     - If the user specifies multiple dates (e.g., "cancel leave for 01/06/2025, 02/06/2025, 04/06/2025"), group consecutive dates (e.g., 01/06/2025 to 02/06/2025, and 04/06/2025 to 04/06/2025).
-     - If the user specifies a single date (e.g., "cancel leave for 01/06/2025"), treat it as a single range (from_date and to_date are the same).
+   - **from_date & to_date**: The exact date range to cancel in `DD/MM/YYYY` format. Treat the user's cancellation request as a single range:
+     - If the user specifies a range (e.g., "cancel leave for 01/06/2025 to 21/06/2025"), use that exact range as from_date and to_date.
+     - If the user specifies multiple dates (e.g., "cancel leave for 01/06/2025, 02/06/2025, 04/06/2025"), treat the earliest and latest dates as the range (e.g., from_date: 01/06/2025, to_date: 04/06/2025).
+     - If the user specifies a single date (e.g., "cancel leave for 01/06/2025"), set from_date and to_date to the same date (e.g., 01/06/2025).
+     - Do not split non-continuous ranges into separate entries. The range must be exact and will only cancel leaves that exactly match this range in the system.
    - **reply**: Generate a friendly message acknowledging the cancellation (e.g., "Hi [User], your leave cancellation request has been processed.").
 
 ### Date Grouping Rules for Leave Requests:
@@ -101,8 +92,11 @@ Your job is to:
 - For a request like "2 days leave on 30th May and 16th June," create two entries: one for 30th May (1 day) and one for 16th June (1 day).
 
 ### Cancellation Rules:
-- For a cancellation request like "cancel leave for 01/06/2025 to 21/06/2025", do not treat it as cancelling all dates in between. Instead, split into specific dates or continuous ranges based on the user's intent (e.g., 01/06/2025 to 01/06/2025 and 21/06/2025 to 21/06/2025 if non-continuous).
-- For a request like "cancel leave for 01/06/2025, 02/06/2025, 04/06/2025", group consecutive dates (e.g., 01/06/2025 to 02/06/2025, and 04/06/2025 to 04/06/2025).
+- Treat the cancellation request as a single exact range. For example:
+  - "cancel leave for 01/06/2025 to 21/06/2025" should set from_date to 01/06/2025 and to_date to 21/06/2025.
+  - "cancel leave for 01/06/2025, 02/06/2025, 04/06/2025" should set from_date to 01/06/2025 and to_date to 04/06/2025.
+  - "cancel leave for 01/06/2025" should set from_date and to_date to 01/06/2025.
+- Do not split or reinterpret the range. The cancellation will only succeed if there is an exact match for the specified range in the leave records.
 
 ### Thread Handling:
 - Treat the thread as a conversation. Prioritize the latest message for determining intent (e.g., confirmation or cancellation).
@@ -189,10 +183,11 @@ def get_gemini_response(prompt):
                         return "failure", None, "No leave details were provided. Please include specific dates in DD/MM/YYYY format and clarify the leave type (e.g., casual, sick, half-day, festive)."
                     return "success", [args.get("reply"), leave_entries], None
                 elif function_name == "cancel_leave_request":
-                    cancel_dates = args.get("cancel_dates", [])
-                    if not cancel_dates:
+                    from_date = args.get("from_date")
+                    to_date = args.get("to_date")
+                    if not (from_date and to_date):
                         return "failure", None, "No cancellation dates were provided. Please specify the dates to cancel in DD/MM/YYYY format (e.g., 01/06/2025)."
-                    return "cancel", [args.get("reply"), cancel_dates], None
+                    return "cancel", [args.get("reply"), {"from_date": from_date, "to_date": to_date}], None
 
         response_text = parts[-1].get("text", "").strip()
         if "couldn't find any specific dates" in response_text.lower():
@@ -285,30 +280,20 @@ def handle_leaves_management_event(event):
         # Handle cancellation
         else:  # status == "cancel"
             default_reply = data[0].replace("[User]", slack_user_name)
-            cancel_dates = data[1]
+            cancel_details = data[1]
+            from_date = cancel_details["from_date"]
+            to_date = cancel_details["to_date"]
 
-            # Validate all dates
-            for date_range in cancel_dates:
-                from_date = date_range["from_date"]
-                to_date = date_range["to_date"]
-                if not (is_valid_date(from_date) and is_valid_date(to_date)):
-                    send_threaded_reply(channel, thread_ts, "Invalid date format in cancellation request. Please use DD/MM/YYYY (e.g., 30/05/2025) and try again, or tag Prateek for assistance.")
-                    return json.dumps({"status": "failed"}), 400
+            if not (is_valid_date(from_date) and is_valid_date(to_date)):
+                send_threaded_reply(channel, thread_ts, "Invalid date format in cancellation request. Please use DD/MM/YYYY (e.g., 30/05/2025) and try again, or tag Prateek for assistance.")
+                return json.dumps({"status": "failed"}), 400
 
-            # Delete the rows from Google Sheets for each date range
-            success, deleted_ranges, message = delete_row_from_google_sheets(SHEET_ID, LEAVES_SHEET_NAME, slack_user_name, cancel_dates)
-            logging.info(f"📝 Cancellation attempt for {slack_user_name}: Success={success}, Deleted Ranges={deleted_ranges}, Message={message}")
+            # Delete the row from Google Sheets for the exact date range
+            success, message = delete_row_from_google_sheets(SHEET_ID, LEAVES_SHEET_NAME, slack_user_name, from_date, to_date)
+            logging.info(f"📝 Cancellation attempt for {slack_user_name} from {from_date} to {to_date}: Success={success}, Message={message}")
 
             # Construct the final Slack message
-            if success:
-                cancelled_dates_str = "\n".join([
-                    f"• {dr['from_date']}" if dr["from_date"] == dr["to_date"] else f"• {dr['from_date']} to {dr['to_date']}"
-                    for dr in deleted_ranges
-                ])
-                final_reply = f"{default_reply}\n\n**Cancelled Leaves:**\n{cancelled_dates_str}"
-            else:
-                final_reply = message
-
+            final_reply = message if not success else f"{default_reply}\n\n**Cancelled Leave:**\n• {from_date if from_date == to_date else f'{from_date} to {to_date}'}"
             send_threaded_reply(channel, thread_ts, final_reply)
             return json.dumps({"status": "cancelled" if success else "failed"}), 200
 
