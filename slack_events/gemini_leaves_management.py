@@ -28,7 +28,7 @@ FUNCTION_DECLARATIONS = {
                             "to_date": {"type": "string", "description": "End date in DD/MM/YYYY format"},
                             "num_days": {"type": "number", "description": "Number of leave days, excluding weekends, half-day counts as 0.5"},
                             "reason_stated": {"type": "string", "description": "Reason for the leave, if provided"},
-                            "reply": {"type": "string", "description": "Professional reply message acknowledging the leave"}
+                            "reply": {"type": "string", "description": "Friendly reply message acknowledging the leave"}
                         },
                         "required": ["leave_type", "from_date", "to_date", "num_days", "reply"]
                     }
@@ -41,7 +41,7 @@ FUNCTION_DECLARATIONS = {
                         "properties": {
                             "from_date": {"type": "string", "description": "Start date of the leave to cancel in DD/MM/YYYY format"},
                             "to_date": {"type": "string", "description": "End date of the leave to cancel in DD/MM/YYYY format"},
-                            "reply": {"type": "string", "description": "Professional reply message acknowledging the cancellation"}
+                            "reply": {"type": "string", "description": "Friendly reply message acknowledging the cancellation"}
                         },
                         "required": ["from_date", "to_date", "reply"]
                     }
@@ -67,7 +67,7 @@ Your job is to:
    - **reason_stated**: Reason stated by the user for the leave, if provided.
 3. For cancellation requests, call the `cancel_leave_request` function to extract:
    - **from_date & to_date**: The dates of the leave to cancel in `DD/MM/YYYY` format.
-   - **reply**: Generate a professional message acknowledging the cancellation.
+   - **reply**: Generate a friendly message acknowledging the cancellation.
 
 ### Thread Handling:
 - Treat the thread as a brunch. Prioritize the latest message for determining intent (e.g., confirmation or cancellation).
