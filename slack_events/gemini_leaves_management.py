@@ -8,7 +8,7 @@ import re
 from pytz import timezone
 from google_sheets_writer import write_to_google_sheets, delete_row_from_google_sheets
 
-MODEL = "gemini-1.5-flash"
+MODEL = "gemini-2.0-flash-lite"
 SHEET_ID = "1uhoqA6rPZJXWT-jiLLOaInodNc4FHxsxU_MNNRIGg1o"
 LEAVES_SHEET_NAME = "Leaves"
 
@@ -77,14 +77,14 @@ Your job is to:
        - **from_date & to_date**: Extract leave dates in `DD/MM/YYYY` format for each continuous range. If no dates are mentioned, assume today's date. If the year is not specified, assume the current year or the next year if the date has passed.
        - **num_days**: Calculate the number of leave days for each entry, excluding weekends (Saturday and Sunday). Each half-day counts as 0.5 days.
        - **reason_stated**: Reason stated by the user for the leave, if provided (same for all entries).
-   - **reply**: Generate a professional message acknowledging the leave (e.g., "Hi [User], your leave request has been noted. Thanks!").
+   - **reply**: Generate a professional message acknowledging the leave.
 3. For cancellation requests, call the `cancel_leave_request` function to extract:
    - **from_date & to_date**: The exact date range to cancel in `DD/MM/YYYY` format. Treat the user's cancellation request as a single range:
      - If the user specifies a range (e.g., "cancel leave for 01/06/2025 to 21/06/2025"), use that exact range as from_date and to_date.
      - If the user specifies multiple dates (e.g., "cancel leave for 01/06/2025, 02/06/2025, 04/06/2025"), treat the earliest and latest dates as the range (e.g., from_date: 01/06/2025, to_date: 04/06/2025).
      - If the user specifies a single date (e.g., "cancel leave for 01/06/2025"), set from_date and to_date to the same date (e.g., 01/06/2025).
      - Do not split non-continuous ranges into separate entries. The range must be exact and will only cancel leaves that exactly match this range in the system.
-   - **reply**: Generate a friendly message acknowledging the cancellation (e.g., "Hi [User], your leave cancellation request has been processed.").
+   - **reply**: Generate a friendly message acknowledging the cancellation.
 
 ### Date Grouping Rules for Leave Requests:
 - Group consecutive dates into a single entry (e.g., 12th and 13th become one entry: 12th to 13th).
@@ -101,7 +101,7 @@ Your job is to:
 ### Thread Handling:
 - Treat the thread as a conversation. Prioritize the latest message for determining intent (e.g., confirmation or cancellation).
 - If a user posts a tentative leave (e.g., 'might be on leave on 6th May') and later confirms (e.g., 'confirming leaves'), interpret it as a confirmed leave request.
-- Combine all thread messages to determine the intent, but give higher weight to the most recent message.
+- Combine all thread messages to determine the intent, but give higher weight to the most recent message. 
 
 If you cannot determine the intent or details, respond with a detailed reason why the request couldn't be processed, such as:
 - "I couldn't find any specific dates in your message."

@@ -4,7 +4,7 @@ from slack_utils import send_threaded_reply, get_slack_user_name, fetch_thread_h
 from secret_utils import get_secret
 import requests
 
-MODEL = "gemini-2.5-pro-exp-03-25"  # Adjust as needed
+MODEL = "gemini-2.5-flash-preview-05-20"  # Adjust as needed
 
 SYSTEM_INSTRUCTION = {
     "parts": [
