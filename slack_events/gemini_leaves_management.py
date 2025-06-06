@@ -4,7 +4,6 @@ import requests
 from slack_utils import send_threaded_reply, get_slack_user_name, fetch_thread_history
 from secret_utils import get_secret
 from datetime import datetime
-import re
 from pytz import timezone
 from google_sheets_writer import write_to_google_sheets, delete_row_from_google_sheets
 
@@ -19,13 +18,12 @@ FUNCTION_DECLARATIONS = {
             "function_declarations": [
                 {
                     "name": "process_leave_request",
-                    "description": "Process a leave request and extract structured leave details. Returns a list of leave entries for non-continuous dates.",
+                    "description": "Extract leave request details from a Slack message thread.",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "leave_entries": {
                                 "type": "array",
-                                "description": "List of leave entries, each representing a continuous date range",
                                 "items": {
                                     "type": "object",
                                     "properties": {
@@ -33,27 +31,25 @@ FUNCTION_DECLARATIONS = {
                                         "from_date": {"type": "string", "description": "Start date in DD/MM/YYYY format"},
                                         "to_date": {"type": "string", "description": "End date in DD/MM/YYYY format"},
                                         "num_days": {"type": "number", "description": "Number of leave days, excluding weekends, half-day counts as 0.5"},
-                                        "reason_stated": {"type": "string", "description": "Reason for the leave, if provided"}
+                                        "reason": {"type": "string", "description": "Reason for the leave, if provided"}
                                     },
                                     "required": ["leave_type", "from_date", "to_date", "num_days"]
                                 }
-                            },
-                            "reply": {"type": "string", "description": "Friendly reply message acknowledging the leave"}
+                            }
                         },
-                        "required": ["leave_entries", "reply"]
+                        "required": ["leave_entries"]
                     }
                 },
                 {
                     "name": "cancel_leave_request",
-                    "description": "Cancel a previously logged leave request by specifying an exact date range to cancel.",
+                    "description": "Extract cancellation request details from a Slack message thread.",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "from_date": {"type": "string", "description": "Start date to cancel in DD/MM/YYYY format"},
-                            "to_date": {"type": "string", "description": "End date to cancel in DD/MM/YYYY format"},
-                            "reply": {"type": "string", "description": "Friendly reply message acknowledging the cancellation"}
+                            "to_date": {"type": "string", "description": "End date to cancel in DD/MM/YYYY format"}
                         },
-                        "required": ["from_date", "to_date", "reply"]
+                        "required": ["from_date", "to_date"]
                     }
                 }
             ]
@@ -61,53 +57,49 @@ FUNCTION_DECLARATIONS = {
     ]
 }
 
-SYSTEM_INSTRUCTION = { 
+SYSTEM_INSTRUCTION = {
     "parts": [
         {
-            "text": """You are Nautifier, a Slack bot in the leaves channel where people announce their leaves to avoid manually filling leave forms.
-Messages could be for sick leave, casual leave, festive leaves, half days, etc. Users may post in threads, where a tentative leave request (e.g., "might be on leave") can be confirmed later (e.g., "confirming leaves"). Users may also cancel leaves (e.g., "cancel leave for 7th").
+            "text": """You are Nautifier, a Slack bot that helps users log leaves in a channel. Users post messages in threads, like "I’m sick today", "casual leave from 10/06/2025 to 12/06/2025", or "cancel leave for 10/06/2025". A user might post a tentative leave (e.g., "might be on leave on 10th June") and later confirm it (e.g., "confirming leaves") in the same thread.
 
 Your job is to:
 1. Detect if the thread is a leave request or a cancellation request.
 2. For leave requests, call the `process_leave_request` function to extract:
    - **leave_entries**: A list of leave entries, where each entry represents a continuous date range.
-     - Group dates into continuous ranges (e.g., 12th and 13th become one entry, but 10th and 12th are separate).
+     - Group consecutive dates into a single entry (e.g., 12th to 13th).
+     - Non-consecutive dates should be separate entries (e.g., 10th, 12th-13th, 18th become three entries).
      - For each entry:
-       - **leave_type**: (casual, sick, half-day, festive). If someone is sick but requests a half-day, mark it as *sick*. Default to *casual* if unclear.
-       - **from_date & to_date**: Extract leave dates in `DD/MM/YYYY` format for each continuous range. If no dates are mentioned, assume today's date. If the year is not specified, assume the current year or the next year if the date has passed.
-       - **num_days**: Calculate the number of leave days for each entry, excluding weekends (Saturday and Sunday). Each half-day counts as 0.5 days.
-       - **reason_stated**: Reason stated by the user for the leave, if provided (same for all entries).
-   - **reply**: Generate a professional message acknowledging the leave.
+       - **leave_type**: Identify as "casual", "sick", "half-day", or "festive". Use these rules:
+         - "sick" if the user mentions "sick", "ill", "unwell", or "not feeling well" (e.g., "I’m sick today", "not feeling well on 10th").
+         - "half-day" if the user explicitly mentions "half day" or "half-day" (e.g., "half day on 10th").
+         - "festive" if the user mentions "festive" or a festival (e.g., "festive leave for Diwali").
+         - "casual" as the default if none of the above apply (e.g., "leave on 10th", "out on 12th").
+         - If "sick" and "half-day" are both mentioned (e.g., "I’m sick, need a half day"), classify as "sick".
+       - **from_date & to_date**: Extract dates in `DD/MM/YYYY` format. If no dates are mentioned, assume today's date. If the year is not specified, assume the current year (or next year if the date has passed).
+       - **num_days**: Calculate the number of leave days, excluding weekends (Saturday and Sunday). Each half-day counts as 0.5 days.
+       - **reason**: Extract the reason if provided (e.g., "for a family event", "because I’m unwell").
 3. For cancellation requests, call the `cancel_leave_request` function to extract:
-   - **from_date & to_date**: The exact date range to cancel in `DD/MM/YYYY` format. Treat the user's cancellation request as a single range:
-     - If the user specifies a range (e.g., "cancel leave for 01/06/2025 to 21/06/2025"), use that exact range as from_date and to_date.
-     - If the user specifies multiple dates (e.g., "cancel leave for 01/06/2025, 02/06/2025, 04/06/2025"), treat the earliest and latest dates as the range (e.g., from_date: 01/06/2025, to_date: 04/06/2025).
-     - If the user specifies a single date (e.g., "cancel leave for 01/06/2025"), set from_date and to_date to the same date (e.g., 01/06/2025).
-     - Do not split non-continuous ranges into separate entries. The range must be exact and will only cancel leaves that exactly match this range in the system.
-   - **reply**: Generate a friendly message acknowledging the cancellation.
-
-### Date Grouping Rules for Leave Requests:
-- Group consecutive dates into a single entry (e.g., 12th and 13th become one entry: 12th to 13th).
-- Non-consecutive dates should be separate entries (e.g., 10th, 12th, 13th, 18th become three entries: 10th, 12th-13th, 18th).
-- For a request like "2 days leave on 30th May and 16th June," create two entries: one for 30th May (1 day) and one for 16th June (1 day).
-
-### Cancellation Rules:
-- Treat the cancellation request as a single exact range. For example:
-  - "cancel leave for 01/06/2025 to 21/06/2025" should set from_date to 01/06/2025 and to_date to 21/06/2025.
-  - "cancel leave for 01/06/2025, 02/06/2025, 04/06/2025" should set from_date to 01/06/2025 and to_date to 04/06/2025.
-  - "cancel leave for 01/06/2025" should set from_date and to_date to 01/06/2025.
-- Do not split or reinterpret the range. The cancellation will only succeed if there is an exact match for the specified range in the leave records.
+   - **from_date & to_date**: The exact date range to cancel in `DD/MM/YYYY` format. Treat the cancellation request as a single range:
+     - If the user specifies a range (e.g., "cancel leave for 01/06/2025 to 21/06/2025"), use that exact range.
+     - If the user specifies multiple dates (e.g., "cancel leave for 01/06/2025, 02/06/2025, 04/06/2025"), treat the earliest and latest dates as the range.
+     - If the user specifies a single date (e.g., "cancel leave for 01/06/2025"), set from_date and to_date to the same date.
 
 ### Thread Handling:
 - Treat the thread as a conversation. Prioritize the latest message for determining intent (e.g., confirmation or cancellation).
-- If a user posts a tentative leave (e.g., 'might be on leave on 6th May') and later confirms (e.g., 'confirming leaves'), interpret it as a confirmed leave request.
-- Combine all thread messages to determine the intent, but give higher weight to the most recent message. 
+- If a user posts a tentative leave (e.g., "might be on leave on 10th June") and later confirms (e.g., "confirming leaves"), interpret it as a confirmed leave request.
+- Combine all thread messages to determine the details, but give higher weight to the most recent message.
 
-If you cannot determine the intent or details, respond with a detailed reason why the request couldn't be processed, such as:
-- "I couldn't find any specific dates in your message."
-- "The leave type is unclear. Please specify if it's casual, sick, half-day, or festive."
-- "The message is ambiguous. Please confirm if this is a leave request or cancellation."
-Always suggest how the user can improve their request, e.g., "Please include specific dates in DD/MM/YYYY format and clarify the leave type."
+### Examples:
+- "I’m sick today" → leave_type: "sick", from_date: today’s date, to_date: today’s date, num_days: 1
+- "leave on 10th June" → leave_type: "casual", from_date: "10/06/YYYY", to_date: "10/06/YYYY", num_days: 1
+- "half day on 10th June because of a doctor visit" → leave_type: "half-day", from_date: "10/06/YYYY", to_date: "10/06/YYYY", num_days: 0.5, reason: "doctor visit"
+- "sick half day on 10th June" → leave_type: "sick", from_date: "10/06/YYYY", to_date: "10/06/YYYY", num_days: 0.5
+- "cancel leave for 10th June" → from_date: "10/06/YYYY", to_date: "10/06/YYYY"
+
+If you cannot determine the intent or details, respond with a short error message like:
+- "I couldn’t find any dates in your message."
+- "I couldn’t determine the leave type. Please specify if it’s casual, sick, half-day, or festive."
+- "Please clarify if this is a leave request or cancellation."
 """
         }
     ]
@@ -124,12 +116,6 @@ GENERATION_CONFIG = {
 def is_valid_date(date_str):
     """
     Validates if a date string is in DD/MM/YYYY format and is a valid date.
-
-    Args:
-        date_str (str): Date in DD/MM/YYYY format.
-
-    Returns:
-        bool: True if valid, False otherwise.
     """
     try:
         datetime.strptime(date_str, "%d/%m/%Y")
@@ -137,13 +123,30 @@ def is_valid_date(date_str):
     except ValueError:
         return False
 
+def validate_leave_entry(entry):
+    """
+    Validates a leave entry to ensure all required fields are present and valid.
+    Returns a tuple: (is_valid, error_message)
+    """
+    required_fields = ["leave_type", "from_date", "to_date", "num_days"]
+    for field in required_fields:
+        if field not in entry:
+            return False, f"Missing required field: {field}"
+    if entry["leave_type"] not in ["casual", "sick", "half-day", "festive"]:
+        return False, f"Invalid leave type: {entry['leave_type']}"
+    if not (is_valid_date(entry["from_date"]) and is_valid_date(entry["to_date"])):
+        return False, "Invalid date format. Please use DD/MM/YYYY (e.g., 30/05/2025)."
+    if not isinstance(entry["num_days"], (int, float)) or entry["num_days"] <= 0:
+        return False, f"Invalid number of days: {entry['num_days']}"
+    return True, None
+
 def get_gemini_response(prompt):
     """
     Fetches a response from Gemini AI using function calling.
     Returns a tuple: (status, data, error_message)
-    - status: "success", "failure", or "cancel"
-    - data: leave_entries and reply for success, or cancellation details for cancel, or None for failure
-    - error_message: detailed reason for failure, if applicable
+    - status: "success", "cancel", or "failure"
+    - data: leave_entries for success, cancellation details for cancel, or None for failure
+    - error_message: reason for failure, if applicable
     """
     try:
         api_key = get_secret("GEMINI_API_KEY")
@@ -161,16 +164,14 @@ def get_gemini_response(prompt):
         response.raise_for_status()
 
         data = response.json()
-        logging.info(f"📩 Full Gemini API Response: {json.dumps(data, indent=2)}")
-
         candidates = data.get("candidates", [])
         if not candidates:
-            return "failure", None, "Incomplete response from the AI service. Please try again or tag Prateek for assistance."
+            return "failure", None, "I couldn’t process your request due to an incomplete response from the AI service. Please try again or tag Prateek for help."
 
         content = candidates[0].get("content", {})
         parts = content.get("parts", [])
         if not parts:
-            return "failure", None, "Incomplete response from the AI service. Please try again or tag Prateek for assistance."
+            return "failure", None, "I couldn’t process your request due to an incomplete response from the AI service. Please try again or tag Prateek for help."
 
         for part in parts:
             if "functionCall" in part:
@@ -180,28 +181,28 @@ def get_gemini_response(prompt):
                 if function_name == "process_leave_request":
                     leave_entries = args.get("leave_entries", [])
                     if not leave_entries:
-                        return "failure", None, "No leave details were provided. Please include specific dates in DD/MM/YYYY format and clarify the leave type (e.g., casual, sick, half-day, festive)."
-                    return "success", [args.get("reply"), leave_entries], None
+                        return "failure", None, "I couldn’t find any leave details in your message. Please include dates in DD/MM/YYYY format (e.g., 30/05/2025)."
+                    # Validate each leave entry
+                    for entry in leave_entries:
+                        is_valid, error = validate_leave_entry(entry)
+                        if not is_valid:
+                            return "failure", None, f"Invalid leave entry: {error}"
+                    return "success", leave_entries, None
                 elif function_name == "cancel_leave_request":
                     from_date = args.get("from_date")
                     to_date = args.get("to_date")
                     if not (from_date and to_date):
-                        return "failure", None, "No cancellation dates were provided. Please specify the dates to cancel in DD/MM/YYYY format (e.g., 01/06/2025)."
-                    return "cancel", [args.get("reply"), {"from_date": from_date, "to_date": to_date}], None
+                        return "failure", None, "I couldn’t find any dates to cancel. Please specify dates in DD/MM/YYYY format (e.g., 30/05/2025)."
+                    if not (is_valid_date(from_date) and is_valid_date(to_date)):
+                        return "failure", None, "Invalid date format for cancellation. Please use DD/MM/YYYY (e.g., 30/05/2025)."
+                    return "cancel", {"from_date": from_date, "to_date": to_date}, None
 
         response_text = parts[-1].get("text", "").strip()
-        if "couldn't find any specific dates" in response_text.lower():
-            return "failure", None, f"{response_text} Please include specific dates in DD/MM/YYYY format (e.g., 30/05/2025)."
-        elif "leave type is unclear" in response_text.lower():
-            return "failure", None, f"{response_text} Please specify the leave type (e.g., casual, sick, half-day, festive)."
-        elif "message is ambiguous" in response_text.lower():
-            return "failure", None, f"{response_text} Please use clear language to indicate a leave request (e.g., 'I need a sick leave on 30/05/2025') or cancellation (e.g., 'cancel leave for 30/05/2025')."
-        else:
-            return "failure", None, f"{response_text} Please try again with clear, unambiguous language, or tag Prateek for assistance."
+        return "failure", None, response_text
 
     except requests.exceptions.RequestException as e:
         logging.error(f"❌ Error calling Gemini API: {e}")
-        return "failure", None, "Failed to process the request due to an issue with the AI service. Please try again or tag Prateek for assistance."
+        return "failure", None, "I couldn’t reach the AI service. Please try again or tag Prateek for help."
 
 def handle_leaves_management_event(event):
     """
@@ -211,93 +212,74 @@ def handle_leaves_management_event(event):
         user_id = event.get("user", "")
         channel = event.get("channel")
         thread_ts = event.get("thread_ts") or event.get("ts")
-        mentioned_text = event.get("text", "")
+        message = event.get("text", "")
+        if not (user_id and channel and thread_ts and message):
+            logging.error(f"❌ Missing required event fields: {event}")
+            return json.dumps({"status": "failed", "error": "Missing required event fields"}), 400
 
         IST = timezone("Asia/Kolkata")
         today_date = datetime.now(IST).strftime("%d/%m/%Y")
-
         slack_user_name = get_slack_user_name(user_id)
-        
+
         # Build thread context
         thread_history = fetch_thread_history(channel, thread_ts, exclude_ts=None)
-        thread_history.append(f"{slack_user_name}: {mentioned_text}")
-        
-        # Add context to the prompt to indicate thread messages
+        thread_history.append(f"{slack_user_name}: {message}")
         thread_context = "\n".join([f"Message {i+1}: {msg}" for i, msg in enumerate(thread_history)])
         prompt = f"Today's date is {today_date}. Use this when required.\nThe following messages are part of a Slack thread:\n{thread_context}"
+
         status, data, error_message = get_gemini_response(prompt)
 
         if status == "failure":
-            send_threaded_reply(channel, thread_ts, error_message)
+            send_threaded_reply(channel, thread_ts, f"Hey {slack_user_name}, {error_message}")
             return json.dumps({"status": "processing_failed"}), 200
 
         # Handle leave request
         if status == "success":
-            reply_message = data[0].replace("[User]", slack_user_name)  # Dynamically insert user name
-            leave_entries = data[1]
-            slack_message = f"{reply_message}\n\n**Leave Details:**\n"
-            all_writes_successful = True
-
+            leave_entries = data
             total_days = sum(entry["num_days"] for entry in leave_entries)
-            slack_message += f"Total Leave Duration: {total_days} day{'s' if total_days != 1 else ''}\n\n"
+            slack_message = f"Hey {slack_user_name}, I’ve noted your leave request! 🎉\n\n"
 
-            for leave in leave_entries:
-                if not (is_valid_date(leave["from_date"]) and is_valid_date(leave["to_date"])):
-                    send_threaded_reply(channel, thread_ts, "Invalid date format in leave request. Please use DD/MM/YYYY (e.g., 30/05/2025) and try again, or tag Prateek for assistance.")
-                    return json.dumps({"status": "failed"}), 400
-
-                # Attempt to write to Google Sheets
+            for entry in leave_entries:
                 success = write_to_google_sheets(SHEET_ID, LEAVES_SHEET_NAME, [
                     datetime.now(IST).strftime("%d/%m/%Y %H:%M:%S"),
                     slack_user_name,
-                    leave["leave_type"],
-                    leave["from_date"],
-                    leave["to_date"],
-                    leave["num_days"],
-                    leave.get("reason_stated", "Not provided")
+                    entry["leave_type"],
+                    entry["from_date"],
+                    entry["to_date"],
+                    entry["num_days"],
+                    entry.get("reason", "Not provided")
                 ])
 
-                if success:
-                    date_range = leave["from_date"] if leave["from_date"] == leave["to_date"] else f"{leave['from_date']} to {leave['to_date']}"
-                    slack_message += (
-                        f"• **Type:** {leave['leave_type'].capitalize()}\n"
-                        f"• **Duration:** {leave['num_days']} day{'s' if leave['num_days'] != 1 else ''}\n"
-                        f"• **Dates:** {date_range}\n"
-                        f"• **Reason:** {leave.get('reason_stated', 'Not provided')}\n\n"
-                    )
-                else:
-                    all_writes_successful = False
-                    logging.error(f"❌ Failed to write leave for {slack_user_name} to Google Sheets: {leave}")
+                if not success:
+                    send_threaded_reply(channel, thread_ts, f"Hey {slack_user_name}, I couldn’t log your leave to Google Sheets. Please try again or tag Prateek for help.")
+                    return json.dumps({"status": "failed"}), 500
 
-            if all_writes_successful:
-                slack_message += "_To cancel, reply in this thread with 'cancel leave for <date>' or a date range (e.g., 'cancel leave for 30/05/2025 to 31/05/2025')._"
-                send_threaded_reply(channel, thread_ts, slack_message)
-                return json.dumps({"status": "logged"}), 200
-            else:
-                send_threaded_reply(channel, thread_ts, f"Hi {slack_user_name}, there was an error logging your leave to Google Sheets. Please try again or tag Prateek for assistance.")
-                return json.dumps({"status": "failed"}), 500
+                date_range = entry["from_date"] if entry["from_date"] == entry["to_date"] else f"{entry['from_date']} to {entry['to_date']}"
+                slack_message += (
+                    f"- {entry['leave_type'].capitalize()} leave for {date_range}\n"
+                    f"- {entry['num_days']} day{'s' if entry['num_days'] != 1 else ''}\n"
+                    f"- Reason: {entry.get('reason', 'Not provided')}\n\n"
+                )
+
+            slack_message += f"Total: {total_days} day{'s' if total_days != 1 else ''}"
+            send_threaded_reply(channel, thread_ts, slack_message)
+            return json.dumps({"status": "logged"}), 200
 
         # Handle cancellation
         else:  # status == "cancel"
-            default_reply = data[0].replace("[User]", slack_user_name)
-            cancel_details = data[1]
-            from_date = cancel_details["from_date"]
-            to_date = cancel_details["to_date"]
-
-            if not (is_valid_date(from_date) and is_valid_date(to_date)):
-                send_threaded_reply(channel, thread_ts, "Invalid date format in cancellation request. Please use DD/MM/YYYY (e.g., 30/05/2025) and try again, or tag Prateek for assistance.")
-                return json.dumps({"status": "failed"}), 400
-
-            # Delete the row from Google Sheets for the exact date range
+            from_date = data["from_date"]
+            to_date = data["to_date"]
             success, message = delete_row_from_google_sheets(SHEET_ID, LEAVES_SHEET_NAME, slack_user_name, from_date, to_date)
-            logging.info(f"📝 Cancellation attempt for {slack_user_name} from {from_date} to {to_date}: Success={success}, Message={message}")
+            if success:
+                date_range = from_date if from_date == to_date else f"{from_date} to {to_date}"
+                slack_message = f"Hey {slack_user_name}, I’ve cancelled your leave for {date_range}. All set now! ✅"
+            else:
+                slack_message = f"Hey {slack_user_name}, {message}"
 
-            # Construct the final Slack message
-            final_reply = message if not success else f"{default_reply}\n\n**Cancelled Leave:**\n• {from_date if from_date == to_date else f'{from_date} to {to_date}'}"
-            send_threaded_reply(channel, thread_ts, final_reply)
+            send_threaded_reply(channel, thread_ts, slack_message)
             return json.dumps({"status": "cancelled" if success else "failed"}), 200
 
     except Exception as e:
         logging.error(f"❌ Error in handle_leaves_management_event: {e}")
-        send_threaded_reply(channel, thread_ts, f"Hi {slack_user_name}, an unexpected error occurred while processing your request. Please try again or tag Prateek for assistance.")
+        send_threaded_reply(channel, thread_ts, f"Hey {slack_user_name}, something went wrong while processing your request. Please try again or tag Prateek for help.")
         return json.dumps({"error": str(e)}), 500
