@@ -14,7 +14,7 @@ logging.info("✅ Logging initialized successfully in slack_events!")
 
 # Channel IDs
 NAUTIFIER_SANDBOX = "C07R5QU0LKZ"
-NAUTIFIER_SANDBOX_CHANNEL = "C08KR42C85C" #Nautifier sandbox public channel
+NAUTIFIER_SANDBOX_CHANNEL = NAUTIFIER_SANDBOX #"C08KR42C85C" #Nautifier sandbox public channel
 WEEKLY_INDUSTRY_UPDATES_CHANNEL = "C08AEB7H0JE" #weekly-industy-updates channel ID
 TAG_MANAGEMENT_CHANNEL = "C01SK3F164U"  # Tag Management Channel ID
 LEAVES_CHANNEL = "C04HY5GR91B"  # Leaves Management Channel ID.
