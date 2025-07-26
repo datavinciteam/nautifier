@@ -5,7 +5,7 @@ steps:
   - deploy
   - slack-event-processor
   - --gen2
-  - --region=us-central1
+  - --region=asia-south2
   - --runtime=python310
   - --source=slack_events
   - --entry-point=slack_event_processor
