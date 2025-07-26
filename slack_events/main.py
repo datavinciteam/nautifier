@@ -20,7 +20,7 @@ NAUTIFIER_SANDBOX_CHANNEL = "C08KR42C85C" #Nautifier sandbox public channel
 WEEKLY_INDUSTRY_UPDATES_CHANNEL = "C08AEB7H0JE" #weekly-industy-updates channel ID
 TAG_MANAGEMENT_CHANNEL = "C01SK3F164U"  # Tag Management Channel ID
 LEAVES_CHANNEL = "C04HY5GR91B"  # Leaves Management Channel ID.
-CHATTAR_PATTAR_CHANNEL = NAUTIFIER_SANDBOX_CHANNEL #"CCHATTERPAT" # chattar-pattar channel ID
+CHATTAR_PATTAR_CHANNEL = "C01NE1S1H9A" # chattar-pattar channel ID
 
 def slack_event_processor(request):
     """
