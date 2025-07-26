@@ -5,6 +5,8 @@ import time
 from gemini_tag_management import handle_tag_management_event
 from gemini_leaves_management import handle_leaves_management_event
 from article_saver import handle_article_saving_event
+from chattar_pattar import handle_chattar_pattar_event
+
 
 # Set up Google Cloud Logging.
 client = google.cloud.logging.Client()
@@ -18,6 +20,7 @@ NAUTIFIER_SANDBOX_CHANNEL = "C08KR42C85C" #Nautifier sandbox public channel
 WEEKLY_INDUSTRY_UPDATES_CHANNEL = "C08AEB7H0JE" #weekly-industy-updates channel ID
 TAG_MANAGEMENT_CHANNEL = "C01SK3F164U"  # Tag Management Channel ID
 LEAVES_CHANNEL = "C04HY5GR91B"  # Leaves Management Channel ID.
+CHATTAR_PATTAR_CHANNEL = NAUTIFIER_SANDBOX_CHANNEL #"CCHATTERPAT" # chattar-pattar channel ID
 
 def slack_event_processor(request):
     """
@@ -47,6 +50,8 @@ def slack_event_processor(request):
             return handle_leaves_management_event(event)
         elif channel == WEEKLY_INDUSTRY_UPDATES_CHANNEL:
             return handle_article_saving_event(event)
+        elif channel == CHATTAR_PATTAR_CHANNEL:
+            return handle_chattar_pattar_event(event)
 
         return json.dumps({"status": "ok"}), 200
 
