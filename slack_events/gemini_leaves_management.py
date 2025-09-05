@@ -166,12 +166,12 @@ def get_gemini_response(prompt):
         data = response.json()
         candidates = data.get("candidates", [])
         if not candidates:
-            return "failure", None, "I couldn't process your request due to an incomplete response from the AI service. Please try again or tag Prateek for help."
+            return "failure", None, "I couldn't process your request due to an incomplete response from the AI service. Please try again or tag HR for help."
 
         content = candidates[0].get("content", {})
         parts = content.get("parts", [])
         if not parts:
-            return "failure", None, "I couldn't process your request due to an incomplete response from the AI service. Please try again or tag Prateek for help."
+            return "failure", None, "I couldn't process your request due to an incomplete response from the AI service. Please try again or tag HR for help."
 
         for part in parts:
             if "functionCall" in part:
@@ -202,7 +202,7 @@ def get_gemini_response(prompt):
 
     except requests.exceptions.RequestException as e:
         logging.error(f"❌ Error calling Gemini API: {e}")
-        return "failure", None, "I couldn't reach the AI service. Please try again or tag Prateek for help."
+        return "failure", None, "I couldn't reach the AI service. Please try again or tag HR for help."
 
 def handle_leaves_management_event(event):
     """
@@ -251,7 +251,7 @@ def handle_leaves_management_event(event):
                 ])
 
                 if not success:
-                    send_threaded_reply(channel, thread_ts, f"Hey {slack_user_name}, I couldn't log your leave to Google Sheets. Please try again or tag Prateek for help.")
+                    send_threaded_reply(channel, thread_ts, f"Hey {slack_user_name}, I couldn't log your leave to Google Sheets. Please try again or tag HR for help.")
                     return json.dumps({"status": "failed"}), 500
 
                 date_range = entry["from_date"] if entry["from_date"] == entry["to_date"] else f"{entry['from_date']} to {entry['to_date']}"
@@ -281,5 +281,5 @@ def handle_leaves_management_event(event):
 
     except Exception as e:
         logging.error(f"❌ Error in handle_leaves_management_event: {e}")
-        send_threaded_reply(channel, thread_ts, f"Hey {slack_user_name}, something went wrong while processing your request. Please try again or tag Prateek for help.")
+        send_threaded_reply(channel, thread_ts, f"Hey {slack_user_name}, something went wrong while processing your request. Please try again or tag HR for help.")
         return json.dumps({"error": str(e)}), 500
