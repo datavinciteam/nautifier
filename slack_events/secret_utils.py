@@ -6,7 +6,7 @@ def get_secret(secret_id):
     """
     try:
         client = secretmanager.SecretManagerServiceClient()
-        project_id = "727903427275"  #viraj-lab
+        project_id = "387722599763"  #datavinci-laboratory
         secret_name = f"projects/{project_id}/secrets/{secret_id}/versions/latest"
         response = client.access_secret_version(name=secret_name)
         return response.payload.data.decode("UTF-8")
