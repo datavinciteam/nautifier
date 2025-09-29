@@ -22,6 +22,10 @@ FUNCTION_DECLARATIONS = {
                     "parameters": {
                         "type": "object",
                         "properties": {
+                            "contextual_message": {
+                                "type": "string",
+                                "description": "A warm, contextual message based on the overall leave request, leave type(s), and reason (e.g., 'Take care and get well soon!' for sick leave, 'Safe travels!' if travel is mentioned). This should be a single message for the entire leave request."
+                            },
                             "leave_entries": {
                                 "type": "array",
                                 "items": {
@@ -37,7 +41,7 @@ FUNCTION_DECLARATIONS = {
                                 }
                             }
                         },
-                        "required": ["leave_entries"]
+                        "required": ["contextual_message", "leave_entries"]
                     }
                 },
                 {
@@ -63,8 +67,20 @@ SYSTEM_INSTRUCTION = {
             "text": """You are Nautifier, a Slack bot that helps users log leaves in a channel. Users post messages in threads, like "I'm sick today", "casual leave from 10/06/2025 to 12/06/2025", or "cancel leave for 10/06/2025". A user might post a tentative leave (e.g., "might be on leave on 10th June") and later confirm it (e.g., "confirming leaves") in the same thread.
 
 Your job is to:
+
 1. Detect if the thread is a leave request or a cancellation request.
 2. For leave requests, call the `process_leave_request` function to extract:
+   - **contextual_message**: Generate ONE warm, contextual message for the entire leave request (not per entry). Base it on the leave type(s) and reason(s). Be empathetic and specific:
+     - **Sick leave**: "Take care and get well soon! 🌡️" or "Hope you feel better soon! 💊" or "Rest well and recover quickly! 🛏️"
+     - **Casual leave with travel**: "Safe travels! ✈️" or "Have a great trip! 🧳" or "Enjoy your vacation! 🏖️"
+     - **Casual leave with family**: "Enjoy time with your family! 👨‍👩‍👧‍👦" or "Have a wonderful time with your loved ones! ❤️"
+     - **Casual leave (general)**: "Enjoy your time off! ☀️" or "Have a great break! 🌴"
+     - **Festive leave**: Match the festival (e.g., "Happy Diwali! 🪔", "Enjoy Eid! 🌙", "Merry Christmas! 🎄", "Happy Holi! 🎨")
+     - **Half-day with appointment**: "Hope your appointment goes well! 📅" or "Good luck with your meeting! 💼"
+     - **Half-day (general)**: "Make the most of your half day! ⏰"
+     - **Multiple leave types**: Prioritize the most significant one or combine (e.g., "Take care and rest well! Hope you recover soon! 💊")
+     - Be creative and vary the messages - don't use the same message repeatedly. Tailor it to the specific reason if provided.
+   
    - **leave_entries**: A list of leave entries, where each entry represents a continuous date range.
      - Group consecutive dates into a single entry (e.g., 12th to 13th).
      - Non-consecutive dates should be separate entries (e.g., 10th, 12th-13th, 18th become three entries).
@@ -78,6 +94,7 @@ Your job is to:
        - **from_date & to_date**: Extract dates in `DD/MM/YYYY` format. If no dates are mentioned, assume today's date. If the year is not specified, assume the current year (or next year if the date has passed).
        - **num_days**: Calculate the number of leave days, excluding weekends (Saturday and Sunday). Each half-day counts as 0.5 days.
        - **reason**: Extract the reason if provided (e.g., "for a family event", "because I'm unwell").
+
 3. For cancellation requests, call the `cancel_leave_request` function to extract:
    - **from_date & to_date**: The exact date range to cancel in `DD/MM/YYYY` format. Treat the cancellation request as a single range:
      - If the user specifies a range (e.g., "cancel leave for 01/06/2025 to 21/06/2025"), use that exact range.
@@ -89,11 +106,21 @@ Your job is to:
 - If a user posts a tentative leave (e.g., "might be on leave on 10th June") and later confirms (e.g., "confirming leaves"), interpret it as a confirmed leave request.
 - Combine all thread messages to determine the details, but give higher weight to the most recent message.
 
+**CRITICAL RULES:**
+- **Only log leave for TODAY or FUTURE dates. Never log leave for past dates.**
+- If someone says "I've been sick for 3 days and need leave today", log ONLY today's date. The "for 3 days" is context/reason, not the leave duration. Don't include weekends in counting total days.
+- If no specific future dates are mentioned, assume TODAY only.
+- Past illness/events are context for the reason field, not dates to log.
+
 ### Examples:
-- "I'm sick today" → leave_type: "sick", from_date: today's date, to_date: today's date, num_days: 1
-- "leave on 10th June" → leave_type: "casual", from_date: "10/06/YYYY", to_date: "10/06/YYYY", num_days: 1
-- "half day on 10th June because of a doctor visit" → leave_type: "half-day", from_date: "10/06/YYYY", to_date: "10/06/YYYY", num_days: 0.5, reason: "doctor visit"
-- "sick half day on 10th June" → leave_type: "sick", from_date: "10/06/YYYY", to_date: "10/06/YYYY", num_days: 0.5
+- "I'm sick today" → contextual_message: "Take care and get well soon! 🌡️", leave_entries: [{leave_type: "sick", from_date: today, to_date: today, num_days: 1}]
+- "leave on 10th June for wedding" → contextual_message: "Enjoy the celebration! 🎊", leave_entries: [{leave_type: "casual", from_date: "10/06/YYYY", to_date: "10/06/YYYY", num_days: 1, reason: "wedding"}]
+- "half day on 10th June because of a doctor visit" → contextual_message: "Hope your appointment goes well! 🩺", leave_entries: [{leave_type: "half-day", from_date: "10/06/YYYY", to_date: "10/06/YYYY", num_days: 0.5, reason: "doctor visit"}]
+- "I've been sick for 3 days and need leave today" → contextual_message: "Rest well and feel better soon! 💊", leave_entries: [{leave_type: "sick", from_date: today, to_date: today, num_days: 1, reason: "been sick for 3 days"}]
+- "festive leave for Diwali on 12th October" → contextual_message: "Happy Diwali! Have a wonderful celebration! 🪔", leave_entries: [{leave_type: "festive", from_date: "12/10/YYYY", to_date: "12/10/YYYY", num_days: 1, reason: "Diwali"}]
+- "going to Goa from 15th to 20th June" → contextual_message: "Safe travels and have an amazing time in Goa! 🏖️", leave_entries: [{leave_type: "casual", from_date: "15/06/YYYY", to_date: "20/06/YYYY", num_days: X, reason: "trip to Goa"}]
+- "sick half day on 10th June" → contextual_message: "Take it easy and feel better! 🌡️", leave_entries: [{leave_type: "sick", from_date: "10/06/YYYY", to_date: "10/06/YYYY", num_days: 0.5}]
+- "leave on 10th, 12th to 13th, and 18th June" → contextual_message: "Enjoy your time off! ☀️", leave_entries: [{leave_type: "casual", from_date: "10/06/YYYY", to_date: "10/06/YYYY", num_days: 1}, {leave_type: "casual", from_date: "12/06/YYYY", to_date: "13/06/YYYY", num_days: 2}, {leave_type: "casual", from_date: "18/06/YYYY", to_date: "18/06/YYYY", num_days: 1}]
 - "cancel leave for 10th June" → from_date: "10/06/YYYY", to_date: "10/06/YYYY"
 
 If you cannot determine the intent or details, respond with a short error message like:
@@ -145,7 +172,7 @@ def get_gemini_response(prompt):
     Fetches a response from Gemini AI using function calling.
     Returns a tuple: (status, data, error_message)
     - status: "success", "cancel", or "failure"
-    - data: leave_entries for success, cancellation details for cancel, or None for failure
+    - data: dict with 'contextual_message' and 'leave_entries' for success, cancellation details for cancel, or None for failure
     - error_message: reason for failure, if applicable
     """
     try:
@@ -180,14 +207,19 @@ def get_gemini_response(prompt):
                 args = function_call.get("args", {})
                 if function_name == "process_leave_request":
                     leave_entries = args.get("leave_entries", [])
+                    contextual_message = args.get("contextual_message", "I've noted your leave request!")
+                    
                     if not leave_entries:
                         return "failure", None, "I couldn't find any leave details in your message. Please include dates in DD/MM/YYYY format (e.g., 30/05/2025)."
+                    
                     # Validate each leave entry
                     for entry in leave_entries:
                         is_valid, error = validate_leave_entry(entry)
                         if not is_valid:
                             return "failure", None, f"Invalid leave entry: {error}"
-                    return "success", leave_entries, None
+                    
+                    return "success", {"contextual_message": contextual_message, "leave_entries": leave_entries}, None
+                
                 elif function_name == "cancel_leave_request":
                     from_date = args.get("from_date")
                     to_date = args.get("to_date")
@@ -235,9 +267,12 @@ def handle_leaves_management_event(event):
 
         # Handle leave request
         if status == "success":
-            leave_entries = data
+            contextual_message = data.get("contextual_message", "I've noted your leave request!")
+            leave_entries = data.get("leave_entries", [])
             total_days = sum(entry["num_days"] for entry in leave_entries)
-            slack_message = f"Hey {slack_user_name}, I've noted your leave request! 🎉\n\n"
+            
+            # Start with contextual message at the top
+            slack_message = f"Hey {slack_user_name}, {contextual_message}\n\n"
 
             for entry in leave_entries:
                 success = write_to_google_sheets(SHEET_ID, LEAVES_SHEET_NAME, [
@@ -256,12 +291,12 @@ def handle_leaves_management_event(event):
 
                 date_range = entry["from_date"] if entry["from_date"] == entry["to_date"] else f"{entry['from_date']} to {entry['to_date']}"
                 slack_message += (
-                    f"- {entry['leave_type'].capitalize()} leave for {date_range}\n"
-                    f"- {entry['num_days']} day{'s' if entry['num_days'] != 1 else ''}\n"
-                    f"- Reason: {entry.get('reason', 'Not provided')}\n\n"
+                    f"📅 {entry['leave_type'].capitalize()} leave: {date_range}\n"
+                    f"📊 {entry['num_days']} day{'s' if entry['num_days'] != 1 else ''}\n"
+                    f"📝 Reason: {entry.get('reason', 'Not provided')}\n\n"
                 )
 
-            slack_message += f"Total: {total_days} day{'s' if total_days != 1 else ''}"
+            slack_message += f"**Total: {total_days} day{'s' if total_days != 1 else ''}**"
             send_threaded_reply(channel, thread_ts, slack_message)
             return json.dumps({"status": "logged"}), 200
 
